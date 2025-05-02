@@ -18,7 +18,9 @@ export const useTimer = (session: StorySession | null) => {
         currentInterval: session.isIntervalMode ? 0 : null,
         isRunning: false,
         isPaused: false,
-        timeRemaining: totalSeconds
+        timeRemaining: totalSeconds,
+        isInPause: false,
+        pauseTimeRemaining: session.pauseDurationSeconds
       });
     } else {
       setTimer(null);
@@ -41,7 +43,8 @@ export const useTimer = (session: StorySession | null) => {
         endTime: new Date(Date.now() + prev.timeRemaining * 1000),
         isRunning: true,
         isPaused: false,
-        currentInterval: prev.currentInterval === null ? null : 0
+        currentInterval: prev.currentInterval === null ? null : 0,
+        isInPause: false
       };
     });
 
@@ -49,16 +52,51 @@ export const useTimer = (session: StorySession | null) => {
       setTimer(prev => {
         if (!prev || !prev.isRunning || prev.isPaused) return prev;
         
+        // Handle pause between intervals
+        if (prev.isInPause) {
+          const newPauseTimeRemaining = Math.max(0, prev.pauseTimeRemaining - 1);
+          
+          // Check if pause is complete
+          if (newPauseTimeRemaining === 0 && session) {
+            // Move to the next interval
+            const nextInterval = (prev.currentInterval || 0) + 1;
+            
+            return {
+              ...prev,
+              isInPause: false,
+              pauseTimeRemaining: session.pauseDurationSeconds,
+              currentInterval: nextInterval >= session.intervalCount ? prev.currentInterval : nextInterval
+            };
+          }
+          
+          return {
+            ...prev,
+            pauseTimeRemaining: newPauseTimeRemaining
+          };
+        }
+        
+        // Handle regular timer
         const newTimeRemaining = Math.max(0, prev.timeRemaining - 1);
         
-        // Check if we need to move to the next interval
-        let newInterval = prev.currentInterval;
-        if (prev.currentInterval !== null && session && session.isIntervalMode) {
+        // Check if we need to move to a pause
+        if (session && session.isIntervalMode && prev.currentInterval !== null) {
           const intervalDurationSecs = session.intervalDurationMinutes * 60;
-          const intervalsCompleted = Math.floor((session.durationMinutes * 60 - newTimeRemaining) / intervalDurationSecs);
+          const currentIntervalTotalSecs = intervalDurationSecs * (prev.currentInterval + 1);
+          const remainingTotalSecs = session.durationMinutes * 60 - newTimeRemaining;
           
-          if (intervalsCompleted !== prev.currentInterval) {
-            newInterval = intervalsCompleted;
+          // If we've completed the current interval but not the last one
+          if (remainingTotalSecs >= currentIntervalTotalSecs && 
+              prev.currentInterval < session.intervalCount - 1 && 
+              !prev.isInPause && 
+              session.pauseDurationSeconds > 0) {
+            
+            // Start a pause
+            return {
+              ...prev,
+              timeRemaining: newTimeRemaining,
+              isInPause: true,
+              pauseTimeRemaining: session.pauseDurationSeconds
+            };
           }
         }
         
@@ -71,6 +109,24 @@ export const useTimer = (session: StorySession | null) => {
             timeRemaining: 0,
             endTime: new Date()
           };
+        }
+        
+        // Update current interval if needed but not in pause
+        let newInterval = prev.currentInterval;
+        if (!prev.isInPause && prev.currentInterval !== null && session && session.isIntervalMode) {
+          const intervalDurationSecs = session.intervalDurationMinutes * 60;
+          // Calculate total workout time including pauses
+          const totalPauseDuration = ((prev.currentInterval) * session.pauseDurationSeconds);
+          // Subtract pause durations to get actual workout time
+          const workoutTimeElapsed = ((session.durationMinutes * 60) - newTimeRemaining) - totalPauseDuration;
+          const currentInterval = Math.min(
+            Math.floor(workoutTimeElapsed / intervalDurationSecs),
+            session.intervalCount - 1
+          );
+          
+          if (currentInterval !== prev.currentInterval) {
+            newInterval = currentInterval;
+          }
         }
         
         return {
@@ -122,7 +178,9 @@ export const useTimer = (session: StorySession | null) => {
         currentInterval: session.isIntervalMode ? 0 : null,
         isRunning: false,
         isPaused: false,
-        timeRemaining: totalSeconds
+        timeRemaining: totalSeconds,
+        isInPause: false,
+        pauseTimeRemaining: session.pauseDurationSeconds
       });
     }
   }, [session, intervalId]);
@@ -140,6 +198,12 @@ export const useTimer = (session: StorySession | null) => {
   const formatTimeRemaining = useCallback(() => {
     if (!timer) return '00:00';
     
+    // If in pause, show pause time instead
+    if (timer.isInPause) {
+      const seconds = timer.pauseTimeRemaining;
+      return `Pause: ${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
+    }
+    
     const minutes = Math.floor(timer.timeRemaining / 60);
     const seconds = timer.timeRemaining % 60;
     
@@ -148,6 +212,11 @@ export const useTimer = (session: StorySession | null) => {
 
   const getProgress = useCallback(() => {
     if (!timer || !session) return 0;
+    
+    // If in pause mode, show progress of the pause
+    if (timer.isInPause) {
+      return ((session.pauseDurationSeconds - timer.pauseTimeRemaining) / session.pauseDurationSeconds) * 100;
+    }
     
     const totalSeconds = session.durationMinutes * 60;
     const elapsedSeconds = totalSeconds - timer.timeRemaining;

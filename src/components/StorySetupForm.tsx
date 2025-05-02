@@ -1,7 +1,5 @@
-
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import {
@@ -12,8 +10,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { GENRES, LANGUAGES, StorySettings } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
 
 interface StorySetupFormProps {
   onGenerateStory: (settings: StorySettings) => void;
@@ -22,22 +22,47 @@ interface StorySetupFormProps {
 
 const StorySetupForm: React.FC<StorySetupFormProps> = ({ onGenerateStory, isGenerating }) => {
   const [durationMinutes, setDurationMinutes] = useState(5);
-  const [genre, setGenre] = useState(GENRES[0]);
+  const [selectedGenres, setSelectedGenres] = useState<string[]>([GENRES[0]]);
   const [language, setLanguage] = useState(LANGUAGES[0].code);
   const [isIntervalMode, setIsIntervalMode] = useState(false);
   const [intervalCount, setIntervalCount] = useState(4);
   const [intervalDurationMinutes, setIntervalDurationMinutes] = useState(1);
+  const [pauseDurationSeconds, setPauseDurationSeconds] = useState(30);
+
+  const handleGenreToggle = (genre: string) => {
+    setSelectedGenres(current => {
+      // If already selected, remove it
+      if (current.includes(genre)) {
+        return current.filter(g => g !== genre);
+      }
+      
+      // If we already have 3 genres and trying to add more, return current
+      if (current.length >= 3) {
+        return current;
+      }
+      
+      // Otherwise add the genre
+      return [...current, genre];
+    });
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Ensure at least one genre is selected
+    if (selectedGenres.length === 0) {
+      setSelectedGenres([GENRES[0]]);
+      return;
+    }
+    
     const settings: StorySettings = {
       durationMinutes,
-      genre,
+      genre: selectedGenres,
       language,
       isIntervalMode,
       intervalCount,
-      intervalDurationMinutes
+      intervalDurationMinutes,
+      pauseDurationSeconds
     };
     
     onGenerateStory(settings);
@@ -119,30 +144,58 @@ const StorySetupForm: React.FC<StorySetupFormProps> = ({ onGenerateStory, isGene
                 />
               </div>
 
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <Label htmlFor="pause-duration">Pause Duration</Label>
+                  <span className="font-medium text-sm">{pauseDurationSeconds} sec</span>
+                </div>
+                <Slider
+                  id="pause-duration"
+                  min={0}
+                  max={60}
+                  step={5}
+                  value={[pauseDurationSeconds]}
+                  onValueChange={([value]) => setPauseDurationSeconds(value)}
+                  className="py-4"
+                />
+              </div>
+
               <div className="pt-2 border-t border-border/50">
                 <div className="flex justify-between items-center">
                   <span>Total Duration:</span>
-                  <span className="font-medium">{intervalCount * intervalDurationMinutes} min</span>
+                  <span className="font-medium">
+                    {(intervalCount * intervalDurationMinutes) + 
+                     ((pauseDurationSeconds / 60) * (intervalCount - 1)).toFixed(1)} min
+                  </span>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Genre Selection */}
+          {/* Genre Selection with Checkboxes */}
           <div className="space-y-2">
-            <Label htmlFor="genre">Story Genre</Label>
-            <Select value={genre} onValueChange={setGenre}>
-              <SelectTrigger id="genre">
-                <SelectValue placeholder="Select genre" />
-              </SelectTrigger>
-              <SelectContent>
-                {GENRES.map((g) => (
-                  <SelectItem key={g} value={g}>
+            <Label className="block mb-2">Story Genres (max 3)</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {GENRES.map((g) => (
+                <div key={g} className="flex items-center space-x-2">
+                  <Checkbox 
+                    id={`genre-${g}`} 
+                    checked={selectedGenres.includes(g)} 
+                    onCheckedChange={() => handleGenreToggle(g)}
+                    disabled={!selectedGenres.includes(g) && selectedGenres.length >= 3}
+                  />
+                  <Label 
+                    htmlFor={`genre-${g}`} 
+                    className="text-sm cursor-pointer"
+                  >
                     {g}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                  </Label>
+                </div>
+              ))}
+            </div>
+            {selectedGenres.length === 0 && (
+              <p className="text-xs text-destructive mt-1">Please select at least one genre</p>
+            )}
           </div>
 
           {/* Language Selection */}
@@ -166,7 +219,7 @@ const StorySetupForm: React.FC<StorySetupFormProps> = ({ onGenerateStory, isGene
           <Button 
             type="submit" 
             className="w-full"
-            disabled={isGenerating}
+            disabled={isGenerating || selectedGenres.length === 0}
           >
             {isGenerating ? "Generating..." : "Generate My Story"}
           </Button>

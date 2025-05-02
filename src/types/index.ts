@@ -2,7 +2,7 @@
 export interface StorySession {
   id: string;
   durationMinutes: number;
-  genre: string;
+  genre: string[];
   language: string;
   storyText: string;
   storyAudioUrl: string | null;
@@ -10,6 +10,7 @@ export interface StorySession {
   isIntervalMode: boolean;
   intervalCount: number;
   intervalDurationMinutes: number;
+  pauseDurationSeconds: number;
   createdAt: Date;
 }
 
@@ -21,15 +22,18 @@ export interface Timer {
   isRunning: boolean;
   isPaused: boolean;
   timeRemaining: number; // in seconds
+  isInPause: boolean;
+  pauseTimeRemaining: number; // in seconds
 }
 
 export interface StorySettings {
   durationMinutes: number;
-  genre: string;
+  genre: string[];
   language: string;
   isIntervalMode: boolean;
   intervalCount: number;
   intervalDurationMinutes: number;
+  pauseDurationSeconds: number;
 }
 
 export const GENRES = [

@@ -12,7 +12,12 @@ export const useStorySession = () => {
       setIsGenerating(true);
       setError(null);
 
-      // Calculate word count based on session duration (140 words per minute)
+      // Calculate total duration including pauses
+      const intervalPauseTotal = settings.isIntervalMode 
+        ? (settings.intervalCount - 1) * (settings.pauseDurationSeconds / 60) 
+        : 0;
+        
+      // Calculate actual workout time (excluding pauses)
       const totalDurationMinutes = settings.isIntervalMode 
         ? settings.intervalCount * settings.intervalDurationMinutes 
         : settings.durationMinutes;
@@ -30,7 +35,7 @@ export const useStorySession = () => {
 
       const newSession: StorySession = {
         id: generateId(),
-        durationMinutes: totalDurationMinutes,
+        durationMinutes: totalDurationMinutes + intervalPauseTotal,
         genre: settings.genre,
         language: settings.language,
         storyText: storyText,
@@ -39,6 +44,7 @@ export const useStorySession = () => {
         isIntervalMode: settings.isIntervalMode,
         intervalCount: settings.intervalCount,
         intervalDurationMinutes: settings.intervalDurationMinutes,
+        pauseDurationSeconds: settings.pauseDurationSeconds,
         createdAt: new Date(),
       };
 
@@ -78,7 +84,17 @@ function countWords(text: string): number {
 function createStoryPrompt(settings: StorySettings, targetWordCount: number): string {
   const { genre, language, isIntervalMode, intervalCount } = settings;
   
-  let prompt = `Write a captivating short ${genre.toLowerCase()} story`;
+  let prompt = `Write a captivating short story`;
+  
+  if (genre.length > 0) {
+    if (genre.length === 1) {
+      prompt += ` in the ${genre[0].toLowerCase()} genre`;
+    } else {
+      const lastGenre = genre[genre.length - 1];
+      const otherGenres = genre.slice(0, -1).map(g => g.toLowerCase());
+      prompt += ` that combines elements of ${otherGenres.join(', ')} and ${lastGenre.toLowerCase()}`;
+    }
+  }
   
   if (isIntervalMode) {
     prompt += ` with exactly ${intervalCount} chapters of equal length`;
@@ -100,29 +116,44 @@ async function mockGenerateStory(prompt: string, settings: StorySettings): Promi
   
   let story = "";
   
-  // Generate a different story based on the genre
-  const genre = settings.genre.toLowerCase();
+  // Generate a different story based on the genres
+  const genres = settings.genre.map(g => g.toLowerCase());
+  const primaryGenre = genres[0] || "adventure";
   
   if (isIntervalMode) {
     for (let i = 1; i <= intervalCount; i++) {
       story += `Chapter ${i}\n\n`;
       
-      if (genre === "adventure") {
+      if (genres.includes("adventure") || genres.includes("fantasy")) {
         story += `The journey continued as our hero faced the ${i === intervalCount ? 'final' : i === 1 ? 'first' : i === 2 ? 'second' : 'next'} challenge. `;
-        story += mockStorySegment(genre, 120); // Shorter segment for each interval
+        story += mockStorySegment(primaryGenre, 120); // Shorter segment for each interval
         story += "\n\n";
-      } else if (genre === "science fiction") {
+      } else if (genres.includes("science fiction")) {
         story += `The ${i === intervalCount ? 'final phase' : `phase ${i}`} of the mission began with an unexpected discovery. `;
-        story += mockStorySegment(genre, 120);
+        story += mockStorySegment(primaryGenre, 120);
         story += "\n\n";
       } else {
-        story += mockStorySegment(genre, 140);
+        story += mockStorySegment(primaryGenre, 140);
         story += "\n\n";
       }
     }
   } else {
     // Single continuous story
-    story = mockStorySegment(genre, settings.durationMinutes * 140);
+    const totalWordCount = settings.durationMinutes * 140;
+    
+    // Generate an intro that incorporates all selected genres
+    let intro = "In a world where ";
+    if (genres.includes("science fiction") && genres.includes("fantasy")) {
+      intro += "technology and magic coexisted, ";
+    } else if (genres.includes("adventure") && genres.includes("mystery")) {
+      intro += "every journey contained hidden secrets, ";
+    } else if (genres.includes("horror") && genres.includes("thriller")) {
+      intro += "fear lurked around every corner, ";
+    } else {
+      intro += "anything was possible, ";
+    }
+    
+    story = intro + mockStorySegment(primaryGenre, totalWordCount - 10);
   }
   
   return story;

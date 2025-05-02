@@ -27,7 +27,7 @@ const Index = () => {
         setCurrentScreen(AppScreen.PLAYER);
         toast({
           title: "Story created!",
-          description: `Your ${settings.genre.toLowerCase()} story is ready to play.`,
+          description: `Your ${settings.genre.join(", ")} story is ready to play.`,
         });
       } else {
         setCurrentScreen(AppScreen.HOME);
@@ -79,7 +79,7 @@ const Index = () => {
       case AppScreen.GENERATING:
         return (
           <GeneratingStory 
-            genre={session?.genre || "custom"} 
+            genre={session?.genre ? session.genre.join(", ") : "custom"} 
           />
         );
         

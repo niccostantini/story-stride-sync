@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, SkipBack } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Play, Pause, SkipBack, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
@@ -12,6 +12,7 @@ interface AudioPlayerProps {
   onPlay: () => void;
   onPause: () => void;
   onReset: () => void;
+  onDiscard: () => void;  // New prop for discard functionality
   formatTimeRemaining: () => string;
   getProgress: () => number;
 }
@@ -22,11 +23,10 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   onPlay,
   onPause,
   onReset,
+  onDiscard,  // New prop
   formatTimeRemaining,
   getProgress
 }) => {
-  // Since we're using mock audio for the MVP, we'll simulate audio playback
-  // In production, this would use the actual audio element
   const [isLoading, setIsLoading] = useState(true);
   
   useEffect(() => {
@@ -102,6 +102,17 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
           <span className="sr-only">
             {timer?.isRunning && !timer?.isPaused ? "Pause" : "Play"}
           </span>
+        </Button>
+        
+        {/* Discard Story Button */}
+        <Button
+          variant="outline"
+          size="icon"
+          className="rounded-full text-destructive hover:bg-destructive/10"
+          onClick={onDiscard}
+        >
+          <Trash2 className="h-5 w-5" />
+          <span className="sr-only">Discard Story</span>
         </Button>
       </div>
     </div>

@@ -1,63 +1,41 @@
 
-import { useState } from "react";
-import { AppScreen, StorySettings } from "@/types";
-import { useStorySession } from "@/hooks/useStorySession";
-import { useTimer } from "@/hooks/useTimer";
+import { useEffect } from "react";
+import { AppScreen } from "@/types";
 import StorySetupForm from "@/components/StorySetupForm";
 import GeneratingStory from "@/components/GeneratingStory";
 import AudioPlayer from "@/components/AudioPlayer";
 import StoryDisplay from "@/components/StoryDisplay";
 import SessionComplete from "@/components/SessionComplete";
-import { useToast } from "@/hooks/use-toast";
 import { Container } from "@/components/ui/container";
+import { useStory } from "@/context/StoryContext";
+import { useStoryTimer } from "@/hooks/useStoryTimer";
 
 const Index = () => {
-  const [currentScreen, setCurrentScreen] = useState<AppScreen>(AppScreen.HOME);
-  const { session, isGenerating, generateStory, clearSession } = useStorySession();
-  const { timer, startTimer, pauseTimer, resumeTimer, resetTimer, formatTimeRemaining, getProgress } = useTimer(session);
-  const { toast } = useToast();
+  const { 
+    currentScreen, 
+    session,
+    setCurrentScreen,
+    generateStorySession,
+    clearSession,
+    discardStory
+  } = useStory();
 
-  // Handle the story generation request
-  const handleGenerateStory = async (settings: StorySettings) => {
-    setCurrentScreen(AppScreen.GENERATING);
-    
-    try {
-      const newSession = await generateStory(settings);
-      if (newSession) {
-        setCurrentScreen(AppScreen.PLAYER);
-        toast({
-          title: "Story created!",
-          description: `Your ${settings.genre.join(", ")} story is ready to play.`,
-        });
-      } else {
-        setCurrentScreen(AppScreen.HOME);
-        toast({
-          title: "Error",
-          description: "Failed to generate story. Please try again.",
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      setCurrentScreen(AppScreen.HOME);
-      toast({
-        title: "Error",
-        description: "Something went wrong. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
+  const { 
+    timer, 
+    startTimer, 
+    pauseTimer, 
+    resumeTimer, 
+    resetTimer, 
+    formatTimeRemaining, 
+    getProgress 
+  } = useStoryTimer(session);
 
   // Handle timer completion
-  const handleTimerComplete = () => {
-    if (timer && timer.timeRemaining <= 0) {
+  useEffect(() => {
+    if (timer && timer.timeRemaining === 0 && currentScreen === AppScreen.PLAYER) {
       setCurrentScreen(AppScreen.COMPLETED);
     }
-  };
-
-  // Monitor timer for completion
-  if (timer && timer.timeRemaining === 0 && currentScreen === AppScreen.PLAYER) {
-    handleTimerComplete();
-  }
+  }, [timer, currentScreen, setCurrentScreen]);
 
   // Handle starting a new session
   const handleStartNew = () => {
@@ -71,8 +49,8 @@ const Index = () => {
       case AppScreen.HOME:
         return (
           <StorySetupForm 
-            onGenerateStory={handleGenerateStory} 
-            isGenerating={isGenerating} 
+            onGenerateStory={generateStorySession} 
+            isGenerating={false} 
           />
         );
         
@@ -92,6 +70,7 @@ const Index = () => {
               onPlay={startTimer}
               onPause={pauseTimer}
               onReset={resetTimer}
+              onDiscard={discardStory}
               formatTimeRemaining={formatTimeRemaining}
               getProgress={getProgress}
             />

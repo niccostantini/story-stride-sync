@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -44,6 +45,29 @@ const StorySetupForm: React.FC<StorySetupFormProps> = ({ onGenerateStory, isGene
       // Otherwise add the genre
       return [...current, genre];
     });
+  };
+
+  // Calculate total duration in seconds
+  const calculateTotalDuration = (): number => {
+    if (!isIntervalMode) return durationMinutes * 60;
+    
+    // Calculate total workout time (intervals only)
+    const intervalTime = intervalCount * intervalDurationMinutes * 60;
+    
+    // Calculate total pause time
+    const pauseTime = (intervalCount - 1) * pauseDurationSeconds;
+    
+    // Return total time in seconds
+    return intervalTime + pauseTime;
+  };
+
+  // Format total duration as mm:ss
+  const formatTotalDuration = (): string => {
+    const totalSeconds = calculateTotalDuration();
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = Math.floor(totalSeconds % 60);
+    
+    return `${minutes.toString().padStart(2, '0')} min ${seconds.toString().padStart(2, '0')} sec`;
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -164,8 +188,7 @@ const StorySetupForm: React.FC<StorySetupFormProps> = ({ onGenerateStory, isGene
                 <div className="flex justify-between items-center">
                   <span>Total Duration:</span>
                   <span className="font-medium">
-                    {(intervalCount * intervalDurationMinutes) + 
-                     ((pauseDurationSeconds / 60) * (intervalCount - 1)).toFixed(1)} min
+                    {formatTotalDuration()}
                   </span>
                 </div>
               </div>

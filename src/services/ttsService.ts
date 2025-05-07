@@ -140,10 +140,32 @@ export const createAudioUrl = (audioContent: string): string => {
     const url = URL.createObjectURL(blob);
     console.log('Created audio URL:', url);
     
-    // Check if URL is accessible
+    // Test the blob URL to make sure it's accessible
+    // This will help debug any issues with the URL creation
     fetch(url)
-      .then(() => console.log('Blob URL is accessible'))
-      .catch(error => console.error('Blob URL is not accessible:', error));
+      .then(response => {
+        if (response.ok) {
+          console.log('Blob URL is accessible', url);
+        } else {
+          console.error('Blob URL is not accessible:', response.statusText);
+        }
+      })
+      .catch(error => {
+        console.error('Error testing blob URL:', error);
+      });
+    
+    // Store URL in sessionStorage to prevent browser garbage collection
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        const urlList = JSON.parse(sessionStorage.getItem('audioUrls') || '[]');
+        if (!urlList.includes(url)) {
+          urlList.push(url);
+          sessionStorage.setItem('audioUrls', JSON.stringify(urlList));
+        }
+      }
+    } catch (e) {
+      console.error('Error storing URL in sessionStorage:', e);
+    }
     
     return url;
   } catch (error) {

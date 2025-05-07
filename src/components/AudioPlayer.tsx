@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, SkipBack, Trash2, Volume2, VolumeX } from 'lucide-react';
+import { Play, Pause, SkipBack, Trash2, Volume2, VolumeX, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
@@ -53,9 +53,40 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       fetch(audioRef.current.src)
         .then(response => {
           console.log('  - Blob URL fetch response:', response.status);
+          
+          // Download the audio file
+          if (response.ok) {
+            return response.blob();
+          }
+          throw new Error('Could not download audio');
+        })
+        .then(blob => {
+          // Create a download link for the audio
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'story-audio.mp3';
+          document.body.appendChild(a);
+          a.click();
+          
+          // Clean up
+          setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          }, 100);
+          
+          toast({
+            title: "Audio Download",
+            description: "Audio file download started",
+          });
         })
         .catch(error => {
           console.error('  - Blob URL fetch error:', error);
+          toast({
+            title: "Download Failed",
+            description: error.message,
+            variant: "destructive",
+          });
         });
     }
   };
@@ -68,16 +99,20 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       setAudioError(null);
       
       if (!audioRef.current) {
-        audioRef.current = new Audio();
+        audioRef.current = new Audio(audioUrl);
+      } else {
+        audioRef.current.src = audioUrl;
       }
       
       // Configure audio element
-      audioRef.current.src = audioUrl;
       audioRef.current.preload = 'auto';
       audioRef.current.crossOrigin = 'anonymous'; // Try to avoid CORS issues
       
       // Manually attempt to load the audio
       audioRef.current.load();
+      
+      // Explicitly setting volume
+      audioRef.current.volume = 1.0;
       
       // After a short delay, debug the audio status
       setTimeout(debugAudio, 1000);
@@ -86,6 +121,42 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       setAudioError('No audio available');
       setIsLoading(false);
     }
+  }, [audioUrl]);
+  
+  // Add visible HTML audio element for debugging
+  useEffect(() => {
+    // Create a visible audio element for browser controls
+    const createVisibleAudioElement = () => {
+      if (audioUrl && !document.getElementById('visible-audio-element')) {
+        const audioElement = document.createElement('audio');
+        audioElement.id = 'visible-audio-element';
+        audioElement.controls = true;
+        audioElement.style.width = '100%';
+        audioElement.style.marginBottom = '10px';
+        audioElement.style.display = 'none'; // Hide by default in production
+        audioElement.src = audioUrl;
+        
+        // In development mode, make it visible
+        if (window.location.hostname === 'localhost') {
+          audioElement.style.display = 'block';
+        }
+        
+        // Add to DOM
+        const container = document.querySelector('.audio-debug-container');
+        if (container) {
+          container.appendChild(audioElement);
+        }
+      }
+    };
+    
+    createVisibleAudioElement();
+    
+    return () => {
+      const elem = document.getElementById('visible-audio-element');
+      if (elem && elem.parentNode) {
+        elem.parentNode.removeChild(elem);
+      }
+    };
   }, [audioUrl]);
   
   // Set up audio event listeners
@@ -131,12 +202,18 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     audio.addEventListener('canplay', handleCanPlay);
     audio.addEventListener('error', handleError);
     audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('playing', () => console.log('Audio is playing'));
+    audio.addEventListener('waiting', () => console.log('Audio is waiting'));
+    audio.addEventListener('stalled', () => console.log('Audio is stalled'));
     
     return () => {
       // Remove event listeners
       audio.removeEventListener('canplay', handleCanPlay);
       audio.removeEventListener('error', handleError);
       audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('playing', () => console.log('Audio is playing'));
+      audio.removeEventListener('waiting', () => console.log('Audio is waiting'));
+      audio.removeEventListener('stalled', () => console.log('Audio is stalled'));
     };
   }, [timer, onPause, toast]);
   
@@ -146,6 +223,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     if (!audio || !timer) return;
     
     if (timer.isRunning && !timer.isPaused) {
+      // Try to play the audio directly
       const playPromise = audio.play();
       
       if (playPromise !== undefined) {
@@ -190,6 +268,23 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         audioRef.current.src = audioUrl;
         audioRef.current.load();
       }
+      
+      // Try to force-play the audio
+      if (audioRef.current) {
+        try {
+          const playPromise = audioRef.current.play();
+          if (playPromise) {
+            playPromise.then(() => {
+              console.log('Audio playback started successfully');
+            }).catch(err => {
+              console.error('Failed to start audio playback:', err);
+            });
+          }
+        } catch (error) {
+          console.error('Error trying to play audio:', error);
+        }
+      }
+      
       onPlay();
     }
   };
@@ -218,6 +313,9 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
           <AlertDescription>{audioError}</AlertDescription>
         </Alert>
       )}
+      
+      {/* Audio Debug Container */}
+      <div className="audio-debug-container mb-4"></div>
       
       {/* Timer Display */}
       <div className="text-4xl font-bold text-center mb-6">
@@ -299,19 +397,33 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         </Button>
       </div>
       
-      {/* Debug button in development mode */}
-      {window.location.hostname === 'localhost' && (
-        <div className="mt-4">
+      {/* Debug button with download functionality */}
+      <div className="mt-4">
+        <Button 
+          variant="outline" 
+          size="sm"
+          onClick={debugAudio} 
+          className="w-full text-xs flex items-center justify-center gap-2"
+        >
+          Debug Audio <Download className="h-3 w-3 ml-1" />
+        </Button>
+        
+        {/* Additional play button for direct audio testing */}
+        {window.location.hostname === 'localhost' && (
           <Button 
-            variant="outline" 
+            variant="secondary" 
             size="sm"
-            onClick={debugAudio} 
-            className="w-full text-xs"
+            onClick={() => {
+              if (audioRef.current) {
+                audioRef.current.play().catch(e => console.error('Direct play failed:', e));
+              }
+            }} 
+            className="w-full text-xs mt-2"
           >
-            Debug Audio
+            Force Play Audio
           </Button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };

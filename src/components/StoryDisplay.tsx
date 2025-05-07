@@ -4,6 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { StorySession, Timer } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 
 interface StoryDisplayProps {
   session: StorySession;
@@ -12,18 +13,23 @@ interface StoryDisplayProps {
 
 const StoryDisplay: React.FC<StoryDisplayProps> = ({ session, timer }) => {
   const storyTextRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
   
   useEffect(() => {
     // Auto-scroll logic based on timer progress
-    if (timer && timer.isRunning && !timer.isPaused && storyTextRef.current) {
+    if (timer && timer.isRunning && !timer.isPaused && storyTextRef.current && scrollAreaRef.current) {
       const totalSeconds = session.durationMinutes * 60;
       const elapsedSeconds = totalSeconds - (timer.timeRemaining || 0);
       const scrollProgress = elapsedSeconds / totalSeconds;
       
-      const scrollHeight = storyTextRef.current.scrollHeight - storyTextRef.current.clientHeight;
+      const scrollHeight = storyTextRef.current.scrollHeight - (scrollAreaRef.current.clientHeight || 0);
       const scrollPosition = scrollHeight * scrollProgress;
       
-      storyTextRef.current.scrollTop = scrollPosition;
+      // Use smooth scrolling for better user experience
+      scrollAreaRef.current.scrollTo({
+        top: scrollPosition,
+        behavior: 'smooth'
+      });
     }
   }, [timer, session]);
   
@@ -66,13 +72,15 @@ const StoryDisplay: React.FC<StoryDisplayProps> = ({ session, timer }) => {
       return paragraphs.map((paragraph, index) => (
         <p 
           key={index} 
-          className={`leading-relaxed mb-4 ${
+          className={cn(
+            "leading-relaxed mb-4",
             index === currentParaIndex && timer?.isRunning && !timer?.isPaused
-              ? 'bg-primary/10 -mx-2 px-2 py-1 rounded transition-colors duration-200'
+              ? "bg-primary/10 -mx-2 px-2 py-1 rounded transition-colors duration-200 animate-pulse"
               : index < currentParaIndex
-                ? 'text-muted-foreground'
-                : ''
-          }`}
+                ? "text-muted-foreground"
+                : ""
+          )}
+          data-active={index === currentParaIndex && timer?.isRunning && !timer?.isPaused}
         >
           {paragraph}
         </p>
@@ -91,15 +99,20 @@ const StoryDisplay: React.FC<StoryDisplayProps> = ({ session, timer }) => {
       return (
         <div 
           key={index} 
-          className={`mb-8 ${
+          className={cn(
+            "mb-8",
             isActive 
               ? "opacity-100 bg-primary/10 -mx-2 px-2 py-1 rounded"
               : isCompleted
                 ? "opacity-50"
-                : "opacity-75"
-          } transition-opacity duration-300`}
+                : "opacity-75",
+            "transition-opacity duration-300"
+          )}
         >
-          <h3 className="text-xl font-semibold mb-2">
+          <h3 className={cn(
+            "text-xl font-semibold mb-2",
+            isActive && timer?.isRunning && !timer?.isPaused && "animate-pulse"
+          )}>
             {chapterTitles[index] || `Chapter ${index + 1}`}
           </h3>
           <p className="leading-relaxed whitespace-pre-line">{chapter}</p>
@@ -113,10 +126,10 @@ const StoryDisplay: React.FC<StoryDisplayProps> = ({ session, timer }) => {
       <CardContent className="py-4">
         <h3 className="text-xl font-semibold mb-2">Your Story</h3>
         <ScrollArea 
-          className="h-[200px] rounded-md border p-4" 
-          ref={storyTextRef}
+          className="h-[200px] rounded-md border p-4"
+          ref={scrollAreaRef}
         >
-          <div className="pr-4">
+          <div className="pr-4" ref={storyTextRef}>
             {renderStoryText()}
           </div>
         </ScrollArea>

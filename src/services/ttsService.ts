@@ -132,11 +132,18 @@ export const createAudioUrl = (audioContent: string): string => {
     
     console.log(`Creating audio URL from ${audioContent.length} characters of base64 data`);
     
+    // Create the blob with proper MIME type
     const blob = base64ToBlob(audioContent, 'audio/mp3');
-    console.log('Created blob:', blob.size, 'bytes');
+    console.log('Created blob:', blob.size, 'bytes, type:', blob.type);
     
+    // Create a URL for the blob
     const url = URL.createObjectURL(blob);
     console.log('Created audio URL:', url);
+    
+    // Check if URL is accessible
+    fetch(url)
+      .then(() => console.log('Blob URL is accessible'))
+      .catch(error => console.error('Blob URL is not accessible:', error));
     
     return url;
   } catch (error) {
@@ -156,7 +163,11 @@ const base64ToBlob = (base64: string, mimeType: string): Blob => {
       throw new Error('Invalid base64 string provided');
     }
     
-    const byteCharacters = atob(base64);
+    // Clean the base64 string if needed (sometimes there are newlines or spaces)
+    const cleanedBase64 = base64.replace(/\s/g, '');
+    
+    // Convert base64 to binary
+    const byteCharacters = atob(cleanedBase64);
     const byteArrays = [];
     
     // Process in chunks to avoid excessive memory usage
@@ -185,9 +196,24 @@ const base64ToBlob = (base64: string, mimeType: string): Blob => {
  */
 const generateMockAudioResponse = (): TTSResponse => {
   console.log('Generating mock audio response');
-  // This is a valid, short MP3 base64 string (a small beep sound)
-  // Using a verified working minimal MP3 to prevent browser freezes
+  // This is a valid MP3 base64 string for a short notification sound
   return { 
-    audioContent: 'SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tAwAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAADQgD///////////////////////////////////////////8AAAA8TEFNRTMuMTAwA8MAAAAAAAAAABQgJAUHQQAB9AAAA0L+aPYmAAAAAAAAAAAAAAAAAAAA' 
+    audioContent: 'SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAASAAAJGAAYGBgYJCQkJCQwMDAwMDw8PDw8SUlJSUlVVVVVVWhoaGhoc3Nzc3N/f39/f4uLi4uLl5eXl5eioqKioq6urq6uurq6urrFxcXFxdDQ0NDQ3Nzc3Nzn5+fn5/Pz8/Pz//////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAZBAAAAAAAACRjDlJxFAAAAAAD/+xBkAA/wAABpAAAACAAADSAAAAEAAAGkAAAAIAAANIAAAARMQU1FMy45OS41VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU='
   };
+};
+
+// Export a test function to check audio conversion directly
+export const testAudioConversion = async (text: string = 'Testing audio playback'): Promise<string> => {
+  try {
+    const ttsResponse = await textToSpeech({
+      text: text,
+      languageCode: 'en-US'
+    });
+    
+    const audioUrl = createAudioUrl(ttsResponse.audioContent);
+    return audioUrl;
+  } catch (error) {
+    console.error('Audio test failed:', error);
+    throw error;
+  }
 };

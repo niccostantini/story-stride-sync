@@ -1,11 +1,12 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, SkipBack, Trash2 } from 'lucide-react';
+import { Play, Pause, SkipBack, Trash2, Volume2, VolumeX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { Timer } from '@/types';
 import { useToast } from '@/hooks/use-toast';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface AudioPlayerProps {
   audioUrl: string | null;
@@ -32,6 +33,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   const [audioError, setAudioError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
+  const [isMuted, setIsMuted] = useState(false);
   
   // Debug function to check audio element and URL
   const debugAudio = () => {
@@ -153,9 +155,9 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
           // If autoplay is blocked, show a toast notification
           if (error.name === 'NotAllowedError') {
             toast({
-              title: "Autoplay blocked",
-              description: "Please click play to start audio playback",
-              variant: "warning",
+                title: "Autoplay blocked",
+                description: "Please click play to start audio playback",
+                variant: "default", // Changed from "warning" to "default"
             });
           } else {
             setAudioError(`Error playing audio: ${error.message}`);
@@ -199,14 +201,22 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     }
     onReset();
   };
+  
+  // Handle mute toggle
+  const toggleMute = () => {
+    if (audioRef.current) {
+      audioRef.current.muted = !audioRef.current.muted;
+      setIsMuted(!isMuted);
+    }
+  };
 
   return (
     <div className="w-full max-w-md mx-auto">
       {/* Audio status message */}
       {audioError && (
-        <div className="text-destructive text-sm text-center mb-2">
-          {audioError}
-        </div>
+        <Alert variant="destructive" className="mb-4">
+          <AlertDescription>{audioError}</AlertDescription>
+        </Alert>
       )}
       
       {/* Timer Display */}
@@ -260,6 +270,21 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
           <span className="sr-only">
             {timer?.isRunning && !timer?.isPaused ? "Pause" : "Play"}
           </span>
+        </Button>
+        
+        {/* Mute/Unmute Button */}
+        <Button
+          variant="outline"
+          size="icon"
+          className="rounded-full"
+          onClick={toggleMute}
+        >
+          {isMuted ? (
+            <VolumeX className="h-5 w-5" />
+          ) : (
+            <Volume2 className="h-5 w-5" />
+          )}
+          <span className="sr-only">{isMuted ? "Unmute" : "Mute"}</span>
         </Button>
         
         {/* Discard Story Button */}

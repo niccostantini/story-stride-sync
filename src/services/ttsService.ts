@@ -1,5 +1,4 @@
-
-import { API_KEYS } from '../config/apiKeys';
+import { API_KEYS, isDevelopmentMode, isPreviewMode } from '../config/apiKeys';
 
 interface TTSRequest {
   text: string;
@@ -21,10 +20,22 @@ export const textToSpeech = async (options: TTSRequest): Promise<TTSResponse> =>
   try {
     const voiceName = options.voiceName || getVoiceForLanguage(options.languageCode);
     
-    const response = await fetch('https://texttospeech.googleapis.com/v1/text:synthesize?key=' + API_KEYS.GOOGLE_CLOUD_TTS, {
+    // Check if we're in a valid environment to make API calls
+    if (API_KEYS.GOOGLE_CLOUD_TTS === 'DEMO_KEY') {
+      console.log('Using mock TTS in unsupported environment');
+      return generateMockAudioResponse();
+    }
+
+    const apiUrl = 'https://texttospeech.googleapis.com/v1/text:synthesize';
+    const apiKey = API_KEYS.GOOGLE_CLOUD_TTS;
+    
+    console.log(`Making TTS request from: ${window.location.hostname}`);
+    
+    const response = await fetch(`${apiUrl}?key=${apiKey}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Origin': window.location.origin,
       },
       body: JSON.stringify({
         input: {
@@ -44,6 +55,7 @@ export const textToSpeech = async (options: TTSRequest): Promise<TTSResponse> =>
 
     if (!response.ok) {
       const errorData = await response.json();
+      console.error('TTS API Error:', errorData);
       throw new Error(`Google TTS API Error: ${errorData.error?.message || response.statusText}`);
     }
 
@@ -51,6 +63,13 @@ export const textToSpeech = async (options: TTSRequest): Promise<TTSResponse> =>
     return data as TTSResponse;
   } catch (error) {
     console.error('Error in text-to-speech conversion:', error);
+    
+    // In development or preview mode, we can fall back to mock audio
+    if (isDevelopmentMode || isPreviewMode) {
+      console.log('Falling back to mock audio after error');
+      return generateMockAudioResponse();
+    }
+    
     throw error;
   }
 };
@@ -101,4 +120,14 @@ const base64ToBlob = (base64: string, mimeType: string): Blob => {
   }
   
   return new Blob(byteArrays, { type: mimeType });
+};
+
+/**
+ * Generate a mock audio response for testing or when API is unavailable
+ */
+const generateMockAudioResponse = (): TTSResponse => {
+  // This is a tiny 1-second MP3 audio file encoded as base64
+  // It simply contains a beep sound to verify audio is working
+  const mockAudioBase64 = 'SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tAwAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAASAAAeMwAUFBQUFCIiIiIiIjAwMDAwMD4+Pj4+PkxMTExMTFpaWlpaWmhoaGhoaHZ2dnZ2doSEhISEhJKSkpKSkoaWlpaWlqampqamprKysrKysr6+vr6+vsbGxsbGxtDQ0NDQ0N7e3t7e3ura2tra2uLi4uLi4urq6urq6vLy8vLy8vr6+vr6+v///wAAADxMQVZDNTguMTMuMTAzAQAAAAAAAAAkIwznAAAAAAAAAAAAADUgsAAiAABnM+UKACgATAt6waEAAAB9MH1YIFYIFYIFYIFYIFYIFYIFYLAAAAAAWgEAAAAAAACkGBWCBWCBWCBWCBWCBWCBJP//jwAAAAAAAAAAAAAnQKFYIF7///9bAEFi////+YIL//JBUDv/6w8CQD//1eIFf//rBUCgX//KQTioX//of9xX///JmJfkChQoYfwQGCvV9Xqz1Z6vV6vd7vd7ve7/f7/gABAPoPOgAAAAE3/0IAAIPwfB8HwfB8HwfB8HwfA8Dj/wAgIBAQ/8DwECQDwfBIPg+D4Pg+D4Pg+D4HgeB9BOcAIBCJP/EOgQPAQPAeBh+D4Pg+D4Pg+D4Pg+D4HgfQfOFwEHngIHgEDwMPwfB8HwfB8HwfB8HwfA8D6DLcAgfoc+gg+Ag+D4Pg+D4Pg+D4Pg+B4HwfQeUCAQiT/xDoEDwED4Pg+D4Pg+D4Pg+D4PgeB9B54IHngEDwEDwPg+D4Pg+D4Pg+D4Pg+B4H0EZLOAIBAAAAAAAAA//MUxAUDwAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV';
+  return { audioContent: mockAudioBase64 };
 };

@@ -1,10 +1,17 @@
 
 // API Keys configuration with environment awareness
-const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-const isLovablePreview = window.location.hostname === 'preview.lovable.dev';
+const hostname = window.location.hostname;
+const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+const isLovablePreview = hostname === 'preview.lovable.dev';
+const isCustomDomain = !isLocalhost && !isLovablePreview;
+
+// Log the current environment for debugging
+console.log(`Environment detection: hostname=${hostname}`);
+console.log(`Environment status: isLocalhost=${isLocalhost}, isLovablePreview=${isLovablePreview}, isCustomDomain=${isCustomDomain}`);
 
 // Determine if we're in a supported environment (local or Lovable preview)
 const isAllowedEnvironment = isLocalhost || isLovablePreview;
+console.log(`Is allowed environment for API calls: ${isAllowedEnvironment}`);
 
 // Centralized API Keys
 export const API_KEYS = {
@@ -20,4 +27,3 @@ export const isDevelopmentMode = isLocalhost;
 
 // Helper to check if we're in the Lovable preview environment
 export const isPreviewMode = isLovablePreview;
-

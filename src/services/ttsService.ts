@@ -31,6 +31,25 @@ export const textToSpeech = async (options: TTSRequest): Promise<TTSResponse> =>
     const apiKey = API_KEYS.GOOGLE_CLOUD_TTS;
     
     console.log(`Making TTS request from: ${window.location.hostname}`);
+    console.log(`Text length: ${options.text.length} characters`);
+    console.log(`Language: ${options.languageCode}, Voice: ${voiceName}`);
+    
+    const requestBody = {
+      input: {
+        text: options.text,
+      },
+      voice: {
+        languageCode: options.languageCode,
+        name: voiceName,
+      },
+      audioConfig: {
+        audioEncoding: 'MP3',
+        speakingRate: options.speakingRate || 0.9, // Slightly slower for story narration
+        pitch: 0,
+      },
+    };
+    
+    console.log('TTS request body:', JSON.stringify(requestBody));
     
     const response = await fetch(`${apiUrl}?key=${apiKey}`, {
       method: 'POST',
@@ -38,21 +57,17 @@ export const textToSpeech = async (options: TTSRequest): Promise<TTSResponse> =>
         'Content-Type': 'application/json',
         'Origin': window.location.origin,
       },
-      body: JSON.stringify({
-        input: {
-          text: options.text,
-        },
-        voice: {
-          languageCode: options.languageCode,
-          name: voiceName,
-        },
-        audioConfig: {
-          audioEncoding: 'MP3',
-          speakingRate: options.speakingRate || 0.9, // Slightly slower for story narration
-          pitch: 0,
-        },
-      }),
+      body: JSON.stringify(requestBody),
     });
+
+    console.log(`TTS API response status: ${response.status}`);
+    
+    // Log response headers for debugging
+    const headers: Record<string, string> = {};
+    response.headers.forEach((value, key) => {
+      headers[key] = value;
+    });
+    console.log('TTS API response headers:', headers);
 
     if (!response.ok) {
       const errorData = await response.json();
@@ -61,6 +76,17 @@ export const textToSpeech = async (options: TTSRequest): Promise<TTSResponse> =>
     }
 
     const data = await response.json();
+    
+    // Validate audio content
+    if (!data.audioContent) {
+      console.error('TTS API returned no audio content:', data);
+      throw new Error('No audio content returned from TTS API');
+    }
+    
+    // Log success but don't log the actual audio content (too large)
+    console.log('TTS API returned audio successfully, content length:', 
+      data.audioContent ? data.audioContent.length : 0);
+    
     return data as TTSResponse;
   } catch (error) {
     console.error('Error in text-to-speech conversion:', error);
@@ -99,8 +125,20 @@ export const getVoiceForLanguage = (languageCode: string): string => {
  */
 export const createAudioUrl = (audioContent: string): string => {
   try {
+    if (!audioContent) {
+      console.error('No audio content provided to createAudioUrl');
+      throw new Error('No audio content provided');
+    }
+    
+    console.log(`Creating audio URL from ${audioContent.length} characters of base64 data`);
+    
     const blob = base64ToBlob(audioContent, 'audio/mp3');
-    return URL.createObjectURL(blob);
+    console.log('Created blob:', blob.size, 'bytes');
+    
+    const url = URL.createObjectURL(blob);
+    console.log('Created audio URL:', url);
+    
+    return url;
   } catch (error) {
     console.error('Error creating audio URL:', error);
     // Return a data URL with a silent audio clip as fallback
@@ -146,6 +184,7 @@ const base64ToBlob = (base64: string, mimeType: string): Blob => {
  * Generate a mock audio response for testing or when API is unavailable
  */
 const generateMockAudioResponse = (): TTSResponse => {
+  console.log('Generating mock audio response');
   // This is a valid, short MP3 base64 string (a small beep sound)
   // Using a verified working minimal MP3 to prevent browser freezes
   return { 

@@ -1,3 +1,4 @@
+
 import { API_KEYS, isDevelopmentMode, isPreviewMode } from '../config/apiKeys';
 
 interface TTSRequest {
@@ -97,37 +98,57 @@ export const getVoiceForLanguage = (languageCode: string): string => {
  * Convert base64 audio to a playable audio URL
  */
 export const createAudioUrl = (audioContent: string): string => {
-  const blob = base64ToBlob(audioContent, 'audio/mp3');
-  return URL.createObjectURL(blob);
+  try {
+    const blob = base64ToBlob(audioContent, 'audio/mp3');
+    return URL.createObjectURL(blob);
+  } catch (error) {
+    console.error('Error creating audio URL:', error);
+    // Return a data URL with a silent audio clip as fallback
+    return 'data:audio/mp3;base64,SUQzAwAAAAABOlRJVDIAAAAZAAADSW5zdHJ1bWVudGFsIFNvdW5kIEZYAA==';
+  }
 };
 
 /**
  * Helper to convert base64 to Blob
  */
 const base64ToBlob = (base64: string, mimeType: string): Blob => {
-  const byteCharacters = atob(base64);
-  const byteArrays = [];
-  
-  for (let offset = 0; offset < byteCharacters.length; offset += 512) {
-    const slice = byteCharacters.slice(offset, offset + 512);
-    const byteNumbers = new Array(slice.length);
-    
-    for (let i = 0; i < slice.length; i++) {
-      byteNumbers[i] = slice.charCodeAt(i);
+  try {
+    // Validate the base64 string first
+    if (!base64 || typeof base64 !== 'string') {
+      throw new Error('Invalid base64 string provided');
     }
     
-    byteArrays.push(new Uint8Array(byteNumbers));
+    const byteCharacters = atob(base64);
+    const byteArrays = [];
+    
+    // Process in chunks to avoid excessive memory usage
+    const chunkSize = 512;
+    for (let offset = 0; offset < byteCharacters.length; offset += chunkSize) {
+      const slice = byteCharacters.slice(offset, offset + chunkSize);
+      const byteNumbers = new Array(slice.length);
+      
+      for (let i = 0; i < slice.length; i++) {
+        byteNumbers[i] = slice.charCodeAt(i);
+      }
+      
+      byteArrays.push(new Uint8Array(byteNumbers));
+    }
+    
+    return new Blob(byteArrays, { type: mimeType });
+  } catch (error) {
+    console.error('Error converting base64 to blob:', error);
+    // Return a minimal valid blob on error
+    return new Blob([''], { type: mimeType });
   }
-  
-  return new Blob(byteArrays, { type: mimeType });
 };
 
 /**
  * Generate a mock audio response for testing or when API is unavailable
  */
 const generateMockAudioResponse = (): TTSResponse => {
-  // This is a tiny 1-second MP3 audio file encoded as base64
-  // It simply contains a beep sound to verify audio is working
-  const mockAudioBase64 = 'SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tAwAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAASAAAeMwAUFBQUFCIiIiIiIjAwMDAwMD4+Pj4+PkxMTExMTFpaWlpaWmhoaGhoaHZ2dnZ2doSEhISEhJKSkpKSkoaWlpaWlqampqamprKysrKysr6+vr6+vsbGxsbGxtDQ0NDQ0N7e3t7e3ura2tra2uLi4uLi4urq6urq6vLy8vLy8vr6+vr6+v///wAAADxMQVZDNTguMTMuMTAzAQAAAAAAAAAkIwznAAAAAAAAAAAAADUgsAAiAABnM+UKACgATAt6waEAAAB9MH1YIFYIFYIFYIFYIFYIFYIFYLAAAAAAWgEAAAAAAACkGBWCBWCBWCBWCBWCBWCBJP//jwAAAAAAAAAAAAAnQKFYIF7///9bAEFi////+YIL//JBUDv/6w8CQD//1eIFf//rBUCgX//KQTioX//of9xX///JmJfkChQoYfwQGCvV9Xqz1Z6vV6vd7vd7ve7/f7/gABAPoPOgAAAAE3/0IAAIPwfB8HwfB8HwfB8HwfA8Dj/wAgIBAQ/8DwECQDwfBIPg+D4Pg+D4Pg+D4HgeB9BOcAIBCJP/EOgQPAQPAeBh+D4Pg+D4Pg+D4Pg+D4HgfQfOFwEHngIHgEDwMPwfB8HwfB8HwfB8HwfA8D6DLcAgfoc+gg+Ag+D4Pg+D4Pg+D4Pg+B4HwfQeUCAQiT/xDoEDwED4Pg+D4Pg+D4Pg+D4PgeB9B54IHngEDwEDwPg+D4Pg+D4Pg+D4Pg+B4H0EZLOAIBAAAAAAAAA//MUxAUDwAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV';
-  return { audioContent: mockAudioBase64 };
+  // This is a valid, short MP3 base64 string (a small beep sound)
+  // Using a verified working minimal MP3 to prevent browser freezes
+  return { 
+    audioContent: 'SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tAwAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAADQgD///////////////////////////////////////////8AAAA8TEFNRTMuMTAwA8MAAAAAAAAAABQgJAUHQQAB9AAAA0L+aPYmAAAAAAAAAAAAAAAAAAAA' 
+  };
 };

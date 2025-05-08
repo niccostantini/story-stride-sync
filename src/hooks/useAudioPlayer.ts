@@ -1,15 +1,19 @@
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { Timer } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { getSilentAudioUrl, revokeAudioUrl, cleanupAudioUrls } from '@/services/audioUtils';
 
+// This hook is deprecated and will be removed in a future update.
+// Please use useAudioSession and useAudioPlayback hooks instead.
 export const useAudioPlayer = (
   audioUrl: string | string[] | null,
   timer: Timer | null,
   onPlay: () => void,
   onPause: () => void
 ) => {
+  console.warn('useAudioPlayer is deprecated - use useAudioSession and useAudioPlayback instead');
+  
   const [isLoading, setIsLoading] = useState(true);
   const [audioError, setAudioError] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(false);
@@ -144,16 +148,6 @@ export const useAudioPlayer = (
       });
     }
   };
-
-  // Clean up URLs when component unmounts
-  useEffect(() => {
-    return () => {
-      if (currentAudioUrl && currentAudioUrl.startsWith('blob:')) {
-        revokeAudioUrl(currentAudioUrl);
-      }
-      cleanupAudioUrls();
-    };
-  }, [currentAudioUrl]);
 
   return {
     isLoading,

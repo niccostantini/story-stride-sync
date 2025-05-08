@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { StorySession, StorySettings } from '../types';
+import { StorySession, StorySettings, generateId } from '../types';
 
 export const useStorySession = () => {
   const [session, setSession] = useState<StorySession | null>(null);
@@ -11,18 +11,12 @@ export const useStorySession = () => {
     try {
       setIsGenerating(true);
       setError(null);
-
-      // Calculate total duration including pauses
-      const intervalPauseTotal = settings.isIntervalMode 
-        ? (settings.intervalCount - 1) * (settings.pauseDurationSeconds / 60) 
-        : 0;
-        
-      // Calculate actual workout time (excluding pauses)
-      const totalDurationMinutes = settings.isIntervalMode 
-        ? settings.intervalCount * settings.intervalDurationMinutes 
-        : settings.durationMinutes;
       
-      const targetWordCount = Math.round(totalDurationMinutes * 140);
+      // Calculate total duration for the story
+      const totalSessionDuration = calculateTotalSessionDuration(settings.sets);
+      
+      // Target roughly 140 words per minute for average reading speed
+      const targetWordCount = Math.round(totalSessionDuration / 60 * 140);
       
       // Generate story using OpenAI (this would use the actual API in production)
       const prompt = createStoryPrompt(settings, targetWordCount);
@@ -35,16 +29,13 @@ export const useStorySession = () => {
 
       const newSession: StorySession = {
         id: generateId(),
-        durationMinutes: totalDurationMinutes + intervalPauseTotal,
+        sets: settings.sets,
+        storyMode: settings.storyMode,
         genre: settings.genre,
         language: settings.language,
         storyText: storyText,
         storyAudioUrl: storyAudioUrl,
         wordCount: countWords(storyText),
-        isIntervalMode: settings.isIntervalMode,
-        intervalCount: settings.intervalCount,
-        intervalDurationMinutes: settings.intervalDurationMinutes,
-        pauseDurationSeconds: settings.pauseDurationSeconds,
         createdAt: new Date(),
       };
 
@@ -73,16 +64,27 @@ export const useStorySession = () => {
 };
 
 // Helper functions for the hook
-function generateId(): string {
-  return Math.random().toString(36).substring(2, 15);
-}
-
 function countWords(text: string): number {
   return text.trim().split(/\s+/).length;
 }
 
+function calculateTotalSessionDuration(sets: StorySettings['sets']): number {
+  // Calculate active exercise time only (excluding pauses and rests)
+  let totalSeconds = 0;
+  
+  sets.forEach(set => {
+    set.intervals.forEach(interval => {
+      totalSeconds += interval.duration;
+      // Do not include pauseAfter in story duration
+    });
+    // Do not include restAfter in story duration
+  });
+  
+  return totalSeconds;
+}
+
 function createStoryPrompt(settings: StorySettings, targetWordCount: number): string {
-  const { genre, language, isIntervalMode, intervalCount } = settings;
+  const { genre, language, storyMode } = settings;
   
   let prompt = `Write a captivating short story`;
   
@@ -96,8 +98,11 @@ function createStoryPrompt(settings: StorySettings, targetWordCount: number): st
     }
   }
   
-  if (isIntervalMode) {
-    prompt += ` with exactly ${intervalCount} chapters of equal length`;
+  if (storyMode === "set" || storyMode === "interval") {
+    const unitCount = storyMode === "set" ? settings.sets.length : 
+      settings.sets.reduce((total, set) => total + set.intervals.length, 0);
+    
+    prompt += ` with exactly ${unitCount} ${storyMode === "set" ? "chapters" : "sections"} of equal length`;
   }
   
   prompt += `. The total word count should be approximately ${targetWordCount} words.`;
@@ -111,8 +116,7 @@ async function mockGenerateStory(prompt: string, settings: StorySettings): Promi
   await new Promise(resolve => setTimeout(resolve, 3000)); // Simulate API delay
   
   // In production, this would be an actual API call to OpenAI
-  const isIntervalMode = settings.isIntervalMode;
-  const intervalCount = settings.intervalCount;
+  const storyMode = settings.storyMode;
   
   let story = "";
   
@@ -120,26 +124,51 @@ async function mockGenerateStory(prompt: string, settings: StorySettings): Promi
   const genres = settings.genre.map(g => g.toLowerCase());
   const primaryGenre = genres[0] || "adventure";
   
-  if (isIntervalMode) {
-    for (let i = 1; i <= intervalCount; i++) {
-      story += `Chapter ${i}\n\n`;
+  if (storyMode === "interval") {
+    // Create a mini-story for each interval across all sets
+    let intervalIndex = 1;
+    settings.sets.forEach((set, setIndex) => {
+      set.intervals.forEach((interval) => {
+        story += `Section ${intervalIndex}\n\n`;
+        
+        if (genres.includes("adventure") || genres.includes("fantasy")) {
+          story += `The journey continued as our hero faced the ${intervalIndex === 1 ? 'first' : 'next'} challenge. `;
+          story += mockStorySegment(primaryGenre, 120); // Shorter segment for each interval
+          story += "\n\n";
+        } else if (genres.includes("science fiction")) {
+          story += `The ${intervalIndex === 1 ? 'first phase' : `phase ${intervalIndex}`} of the mission began with an unexpected discovery. `;
+          story += mockStorySegment(primaryGenre, 120);
+          story += "\n\n";
+        } else {
+          story += mockStorySegment(primaryGenre, 140);
+          story += "\n\n";
+        }
+        
+        intervalIndex++;
+      });
+    });
+  } else if (storyMode === "set") {
+    // Create one story per set
+    settings.sets.forEach((set, setIndex) => {
+      story += `Chapter ${setIndex + 1}\n\n`;
       
       if (genres.includes("adventure") || genres.includes("fantasy")) {
-        story += `The journey continued as our hero faced the ${i === intervalCount ? 'final' : i === 1 ? 'first' : i === 2 ? 'second' : 'next'} challenge. `;
-        story += mockStorySegment(primaryGenre, 120); // Shorter segment for each interval
+        story += `The ${setIndex === 0 ? 'adventure began' : 'journey continued'} as our hero faced the ${setIndex === settings.sets.length - 1 ? 'final' : 'next'} challenge. `;
+        story += mockStorySegment(primaryGenre, 180);
         story += "\n\n";
       } else if (genres.includes("science fiction")) {
-        story += `The ${i === intervalCount ? 'final phase' : `phase ${i}`} of the mission began with an unexpected discovery. `;
-        story += mockStorySegment(primaryGenre, 120);
+        story += `The ${setIndex === 0 ? 'mission started' : `phase ${setIndex + 1} began`} with an unexpected discovery. `;
+        story += mockStorySegment(primaryGenre, 180);
         story += "\n\n";
       } else {
-        story += mockStorySegment(primaryGenre, 140);
+        story += mockStorySegment(primaryGenre, 200);
         story += "\n\n";
       }
-    }
+    });
   } else {
     // Single continuous story
-    const totalWordCount = settings.durationMinutes * 140;
+    const totalActiveSeconds = calculateTotalSessionDuration(settings.sets);
+    const totalWordCount = Math.round(totalActiveSeconds / 60 * 140);
     
     // Generate an intro that incorporates all selected genres
     let intro = "In a world where ";

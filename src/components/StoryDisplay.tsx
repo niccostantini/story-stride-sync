@@ -92,9 +92,9 @@ const StoryDisplay: React.FC<StoryDisplayProps> = ({ session, timer }) => {
     const chapterTitles = session.storyText.match(/Chapter \d+/g) || [];
     
     return chapters.map((chapter, index) => {
-      // Fix: Safely check for timer and currentInterval
-      const isActive = timer?.currentInterval === index;
-      const isCompleted = timer?.currentInterval !== null && 
+      // Comprehensive null-checking for timer and timer.currentInterval
+      const isActive = timer && timer.currentInterval !== null && timer.currentInterval === index;
+      const isCompleted = timer && timer.currentInterval !== null && 
                           timer.currentInterval > index;
       
       return (

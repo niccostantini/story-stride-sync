@@ -113,9 +113,6 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       
       // Explicitly setting volume
       audioRef.current.volume = 1.0;
-      
-      // After a short delay, debug the audio status
-      setTimeout(debugAudio, 1000);
     } else {
       console.log('No audio URL available');
       setAudioError('No audio available');
@@ -222,7 +219,8 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     const audio = audioRef.current;
     if (!audio || !timer) return;
     
-    if (timer.isRunning && !timer.isPaused) {
+    // Handle normal play/pause based on timer
+    if (timer.isRunning && !timer.isPaused && !timer.isInPause) {
       // Try to play the audio directly
       const playPromise = audio.play();
       
@@ -235,7 +233,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
             toast({
                 title: "Autoplay blocked",
                 description: "Please click play to start audio playback",
-                variant: "default", // Changed from "warning" to "default"
+                variant: "default",
             });
           } else {
             setAudioError(`Error playing audio: ${error.message}`);
@@ -245,7 +243,13 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     } else {
       audio.pause();
     }
-  }, [timer?.isRunning, timer?.isPaused, timer, toast]);
+    
+    // Handle pause intervals
+    if (timer.isInPause) {
+      console.log('Timer in pause interval, pausing audio');
+      audio.pause();
+    }
+  }, [timer?.isRunning, timer?.isPaused, timer?.isInPause, timer, toast]);
   
   // Handle reset
   useEffect(() => {
@@ -260,6 +264,9 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     
     if (timer.isRunning && !timer.isPaused) {
       onPause();
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
     } else {
       // If there was an error, try to reload the audio before playing
       if (audioError && audioRef.current && audioUrl) {
@@ -330,7 +337,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
             className={cn(
               "w-2 bg-purple rounded-full transition-all duration-300",
               isLoading ? "animate-pulse h-1" :
-              timer?.isRunning && !timer.isPaused 
+              timer?.isRunning && !timer.isPaused && !timer.isInPause
                 ? `animate-audio-wave-${i + 1}`
                 : "h-1"
             )}

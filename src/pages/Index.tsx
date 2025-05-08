@@ -37,6 +37,15 @@ const Index = () => {
     }
   }, [timer, currentScreen, setCurrentScreen]);
 
+  // Fix: Ensure navigation to player screen after story generation is complete
+  useEffect(() => {
+    // Navigate to player screen when session becomes available and we're still on generating screen
+    if (session && currentScreen === AppScreen.GENERATING) {
+      console.log("Story generation complete, navigating to player screen");
+      setCurrentScreen(AppScreen.PLAYER);
+    }
+  }, [session, currentScreen, setCurrentScreen]);
+
   // Handle starting a new session
   const handleStartNew = () => {
     clearSession();

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, SkipBack, Trash2, Volume2, VolumeX, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -182,9 +181,6 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         description: `Could not play audio: ${error?.message || 'Unknown error'}`,
         variant: "destructive",
       });
-      
-      // Additional debug info
-      debugAudio();
     };
     
     const handleEnded = () => {
@@ -219,34 +215,42 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     const audio = audioRef.current;
     if (!audio || !timer) return;
     
+    console.log('Timer state changed:', { 
+      isRunning: timer.isRunning, 
+      isPaused: timer.isPaused,
+      isInPause: timer.isInPause 
+    });
+    
     // Handle normal play/pause based on timer
-    if (timer.isRunning && !timer.isPaused && !timer.isInPause) {
-      // Try to play the audio directly
-      const playPromise = audio.play();
-      
-      if (playPromise !== undefined) {
-        playPromise.catch(error => {
-          console.error('Error playing audio:', error);
-          
-          // If autoplay is blocked, show a toast notification
-          if (error.name === 'NotAllowedError') {
-            toast({
-                title: "Autoplay blocked",
-                description: "Please click play to start audio playback",
-                variant: "default",
-            });
-          } else {
-            setAudioError(`Error playing audio: ${error.message}`);
-          }
-        });
+    if (timer.isRunning && !timer.isPaused) {
+      if (timer.isInPause) {
+        // If we're in an interval pause, pause the audio
+        console.log('Timer in pause interval, pausing audio');
+        audio.pause();
+      } else {
+        // Play the audio if not in pause
+        console.log('Playing audio');
+        const playPromise = audio.play();
+        
+        if (playPromise !== undefined) {
+          playPromise.catch(error => {
+            console.error('Error playing audio:', error);
+            
+            // If autoplay is blocked, show a toast notification
+            if (error.name === 'NotAllowedError') {
+              toast({
+                  title: "Autoplay blocked",
+                  description: "Please click play to start audio playback",
+                  variant: "default",
+              });
+            } else {
+              setAudioError(`Error playing audio: ${error.message}`);
+            }
+          });
+        }
       }
     } else {
-      audio.pause();
-    }
-    
-    // Handle pause intervals
-    if (timer.isInPause) {
-      console.log('Timer in pause interval, pausing audio');
+      // Pause audio if timer is paused or not running
       audio.pause();
     }
   }, [timer?.isRunning, timer?.isPaused, timer?.isInPause, timer, toast]);
@@ -263,11 +267,14 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     if (!timer) return;
     
     if (timer.isRunning && !timer.isPaused) {
+      console.log('Pause button clicked: pausing audio and timer');
       onPause();
       if (audioRef.current) {
         audioRef.current.pause();
       }
     } else {
+      console.log('Play button clicked: starting audio and timer');
+      
       // If there was an error, try to reload the audio before playing
       if (audioError && audioRef.current && audioUrl) {
         setAudioError(null);
@@ -276,23 +283,22 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         audioRef.current.load();
       }
       
-      // Try to force-play the audio
+      onPlay(); // Start the timer first
+      
+      // Directly try to play the audio
       if (audioRef.current) {
-        try {
-          const playPromise = audioRef.current.play();
-          if (playPromise) {
-            playPromise.then(() => {
+        const playPromise = audioRef.current.play();
+        if (playPromise) {
+          playPromise
+            .then(() => {
               console.log('Audio playback started successfully');
-            }).catch(err => {
+            })
+            .catch(err => {
               console.error('Failed to start audio playback:', err);
+              // Even if audio fails, keep timer running
             });
-          }
-        } catch (error) {
-          console.error('Error trying to play audio:', error);
         }
       }
-      
-      onPlay();
     }
   };
   

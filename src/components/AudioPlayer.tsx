@@ -42,7 +42,8 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     currentAudioUrl,
     resetToSilentAudio,
     errorRetryCount,
-    maxRetries
+    maxRetries,
+    loadingProgress
   } = useAudioSession(audioUrl, timer);
   
   // Audio playback control
@@ -64,7 +65,8 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     maxRetries,
     resetToSilentAudio,
     onPlay,
-    onPause
+    onPause,
+    loadingProgress
   });
   
   // Debug UI (visible audio element in dev mode)
@@ -88,6 +90,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         timer={timer}
         audioError={audioError}
         isLoading={isLoading}
+        loadingProgress={loadingProgress}
         formatTimeRemaining={formatTimeRemaining}
         getProgress={getProgress}
       />

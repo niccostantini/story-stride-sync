@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Timer } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { getSilentAudioUrl, revokeAudioUrl, cleanupAudioUrls } from '@/services/audioUtils';
+import { useAudioContent } from './useAudioContent';
 
 /**
  * Hook for managing audio playback session with lifecycle management
@@ -20,19 +21,26 @@ export const useAudioSession = (
   const errorRetryCount = useRef<number>(0);
   const maxRetries = 3;
   
+  // Use our new audio content management hook
+  const { 
+    processedUrls, 
+    isPreloading, 
+    loadingProgress, 
+    getUrlForSet 
+  } = useAudioContent(audioUrl);
+  
   // Get current audio URL based on timer state
   const getCurrentAudioUrl = (): string | null => {
     if (!audioUrl) return null;
     
     // For session-mode audio (single file)
     if (typeof audioUrl === 'string') {
-      return audioUrl;
+      return processedUrls[0] || null;
     }
     
     // For set-based audio array
     if (Array.isArray(audioUrl) && timer) {
-      const index = Math.min(timer.currentSetIndex, audioUrl.length - 1);
-      return audioUrl[index] || null;
+      return getUrlForSet(timer.currentSetIndex);
     }
     
     return null;
@@ -66,6 +74,9 @@ export const useAudioSession = (
       audioRef.current.load();
     }
     
+    // Update loading state based on preloading status
+    setIsLoading(isPreloading);
+    
     // Clean up on unmount
     return () => {
       if (audioRef.current) {
@@ -80,7 +91,7 @@ export const useAudioSession = (
       
       cleanupAudioUrls();
     };
-  }, []);
+  }, [isPreloading]);
   
   // Update audio source when URL or timer state changes
   useEffect(() => {
@@ -122,8 +133,11 @@ export const useAudioSession = (
       }
     };
     
-    setupAudio();
-  }, [audioUrl, timer?.currentSetIndex]);
+    // Only setup audio when we have processed URLs and timer data
+    if (processedUrls.length > 0 && timer) {
+      setupAudio();
+    }
+  }, [processedUrls, timer?.currentSetIndex]);
   
   // Clean up URLs when component unmounts
   useEffect(() => {
@@ -148,6 +162,7 @@ export const useAudioSession = (
     getCurrentAudioUrl,
     resetToSilentAudio,
     errorRetryCount,
-    maxRetries
+    maxRetries,
+    loadingProgress
   };
 };

@@ -10,6 +10,7 @@ interface AudioStatusProps {
   timer: Timer | null;
   audioError: string | null;
   isLoading: boolean;
+  loadingProgress?: number;
   formatTimeRemaining: () => string;
   getProgress: () => number;
 }
@@ -18,6 +19,7 @@ const AudioStatus: React.FC<AudioStatusProps> = ({
   timer,
   audioError,
   isLoading,
+  loadingProgress = 0,
   formatTimeRemaining,
   getProgress
 }) => {
@@ -28,6 +30,17 @@ const AudioStatus: React.FC<AudioStatusProps> = ({
         <Alert variant="destructive" className="mb-4">
           <AlertDescription>{audioError}</AlertDescription>
         </Alert>
+      )}
+      
+      {/* Audio loading progress */}
+      {isLoading && loadingProgress > 0 && loadingProgress < 100 && (
+        <div className="mb-4">
+          <div className="flex justify-between text-xs text-muted-foreground mb-1">
+            <span>Loading audio</span>
+            <span>{loadingProgress}%</span>
+          </div>
+          <Progress value={loadingProgress} className="h-1" />
+        </div>
       )}
       
       {/* Audio Debug Container (invisible in production) */}
@@ -43,6 +56,9 @@ const AudioStatus: React.FC<AudioStatusProps> = ({
         )}
         {timer && !timer.isInPause && !timer.isInRest && timer.isRunning && !timer.isPaused && (
           <Badge variant="default" className="bg-purple">Active</Badge>
+        )}
+        {isLoading && (
+          <Badge variant="outline" className="animate-pulse">Loading Audio</Badge>
         )}
       </div>
       

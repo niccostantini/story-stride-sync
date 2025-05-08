@@ -18,6 +18,7 @@ interface UseAudioPlaybackProps {
   resetToSilentAudio: () => string | null;
   onPlay: () => void;
   onPause: () => void;
+  loadingProgress?: number;
 }
 
 export const useAudioPlayback = ({
@@ -33,11 +34,12 @@ export const useAudioPlayback = ({
   maxRetries,
   resetToSilentAudio,
   onPlay,
-  onPause
+  onPause,
+  loadingProgress = 0
 }: UseAudioPlaybackProps) => {
   const { toast } = useToast();
 
-  // Handle play/pause control
+  // Handle play/pause control with improved error handling
   const handlePlayPause = () => {
     if (!timer) return;
     
@@ -62,6 +64,26 @@ export const useAudioPlayback = ({
             })
             .catch(err => {
               console.error('Playback start error:', err);
+              
+              // More detailed error handling
+              if (err.name === 'NotAllowedError') {
+                toast({
+                  title: "Interaction Required",
+                  description: "Browser requires user interaction before playing audio",
+                  variant: "default",
+                });
+              } else if (err.name === 'AbortError') {
+                // Playback was aborted, likely due to src change - can safely ignore
+                console.log('Playback aborted, likely due to src change');
+              } else {
+                // For other errors, increment retry counter
+                errorRetryCount.current++;
+                
+                if (errorRetryCount.current >= maxRetries) {
+                  setAudioError(`Playback error: ${err.message}`);
+                  resetToSilentAudio();
+                }
+              }
             });
         }
       }
@@ -75,14 +97,14 @@ export const useAudioPlayback = ({
         console.error('Direct play failed:', e);
         toast({
           title: "Playback Error",
-          description: "Could not play audio directly",
+          description: "Could not play audio directly: " + e.message,
           variant: "destructive",
         });
       });
     }
   };
   
-  // Toggle mute state
+  // Toggle mute state with improved feedback
   const toggleMute = () => {
     if (audioRef.current) {
       audioRef.current.muted = !audioRef.current.muted;
@@ -95,7 +117,7 @@ export const useAudioPlayback = ({
     }
   };
   
-  // Debug audio state
+  // Enhanced debug audio state
   const debugAudio = () => {
     console.log('Audio Debug Information:');
     
@@ -107,14 +129,15 @@ export const useAudioPlayback = ({
         duration: audioRef.current.duration,
         src: audioRef.current.src,
         muted: audioRef.current.muted,
-        volume: audioRef.current.volume
+        volume: audioRef.current.volume,
+        loadingProgress: loadingProgress
       };
       
       console.table(debugInfo);
       
       toast({
         title: "Audio Status",
-        description: `Ready: ${debugInfo.readyState}, Paused: ${debugInfo.paused}`,
+        description: `Ready: ${debugInfo.readyState}, Loading: ${loadingProgress}%, Paused: ${debugInfo.paused}`,
       });
     } else {
       console.log('Audio element not initialized');
@@ -126,7 +149,7 @@ export const useAudioPlayback = ({
     }
   };
   
-  // Set up audio event listeners
+  // Set up audio event listeners with improved error recovery
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -175,16 +198,27 @@ export const useAudioPlayback = ({
       }
     };
     
+    // Track audio progress for debugging
+    const handleTimeUpdate = () => {
+      // Not storing this in state to avoid rerenders
+      if (audio.duration > 0) {
+        const percent = (audio.currentTime / audio.duration) * 100;
+        // Optional: You could emit this to a debug state or logging system
+      }
+    };
+    
     // Register event listeners
     audio.addEventListener('canplay', handleCanPlay);
     audio.addEventListener('error', handleError);
     audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('timeupdate', handleTimeUpdate);
     
     // Cleanup
     return () => {
       audio.removeEventListener('canplay', handleCanPlay);
       audio.removeEventListener('error', handleError);
       audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
     };
   }, [timer, onPause, toast, resetToSilentAudio]);
   

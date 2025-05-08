@@ -3,6 +3,13 @@
  * Utility functions for audio processing and management
  */
 
+// Extend Window interface to include our custom property
+declare global {
+  interface Window {
+    audioUrlRefs: string[];
+  }
+}
+
 /**
  * Convert base64 to Blob
  * @param base64 Base64 string to convert
@@ -110,10 +117,12 @@ export const createAudioUrl = (audioContent: string): string => {
     
     // Store URL reference to prevent garbage collection
     try {
-      if (typeof window !== 'undefined' && window.audioUrlRefs) {
+      if (typeof window !== 'undefined') {
+        // Initialize the array if it doesn't exist
+        if (!window.audioUrlRefs) {
+          window.audioUrlRefs = [];
+        }
         window.audioUrlRefs.push(url);
-      } else if (typeof window !== 'undefined') {
-        window.audioUrlRefs = [url];
       }
     } catch (e) {
       console.error('Error storing URL reference:', e);
@@ -133,7 +142,7 @@ export const generateMockAudioResponse = (): { audioContent: string } => {
   console.log('Generating mock audio response');
   // This is a valid MP3 base64 string for a short notification sound
   return { 
-    audioContent: 'SUQzBAAAAAABAFRYWFgAAAASAAADbWFqb3JfYnJhbmQAZGFzaABUWFhYAAAAEQAAA21pbm9yX3ZlcnNpb24AMABUWFhYAAAAHAAAA2NvbXBhdGlibGVfYnJhbmRzAGlzbzZtcDQxAFRTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tAwAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAeAAAjsAAHBwcHDw8PDw8XFxcXFx8fHx8fJycnJycvLy8vLzc3Nzc3Pz8/Pz9HR0dHR09PT09PV1dXV1dfX19fX2dnZ2dncHBwcHB4eHh4eIAAAAAAAAAAAAAAAAAAAAD/+0DEAAAFZAGAQAAAKAWIMTIAAAIAAAH0SAAALisBRW0AAAgAAA+gAAABAYWx0AAAAElubm9jZW50AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATEFNRTMuMTAwVUVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/+0DEBUAADACHIAAAAIIQIS4QAAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQ==' 
+    audioContent: 'SUQzBAAAAAABAFRYWFgAAAASAAADbWFqb3JfYnJhbmQAZGFzaABUWFhYAAAAEQAAA21pbm9yX3ZlcnNpb24AMABUWFhYAAAAHAAAA2NvbXBhdGlibGVfYnJhbmRzAGlzbzZtcDQxAFRTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tAwAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAeAAAjsAAHBwcHDw8PDw8XFxcXFx8fHx8fJycnJycvLy8vLzc3Nzc3Pz8/Pz9HR0dHR09PT09PV1dXV1dfX19fX2dnZ2dncHBwcHB4eHh4eIAAAAAAAAAAAAAAAAAAAAD/+0DEAAAFZAGAQAAAKAWIMTIAAAIAAAH0SAAALisBRW0AAAgAAA+gAAABAYWx0AAAAElubm9jZW50AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATEFNRTMuMTAwVUVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/+0DEBUAADACHIAAAAIIQIS4QAAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQ==' 
   };
 };
 
@@ -164,7 +173,13 @@ export const revokeAudioUrl = (url: string): void => {
 
 // Clean up all audio URLs when needed (e.g., on component unmount)
 export const cleanupAudioUrls = (): void => {
-  if (typeof window !== 'undefined' && window.audioUrlRefs) {
+  if (typeof window !== 'undefined') {
+    // Initialize the array if it doesn't exist to avoid errors
+    if (!window.audioUrlRefs) {
+      window.audioUrlRefs = [];
+      return;
+    }
+    
     window.audioUrlRefs.forEach(url => {
       try {
         URL.revokeObjectURL(url);
@@ -175,4 +190,3 @@ export const cleanupAudioUrls = (): void => {
     window.audioUrlRefs = [];
   }
 };
-

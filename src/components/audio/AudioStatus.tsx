@@ -27,7 +27,7 @@ const AudioStatus: React.FC<AudioStatusProps> = ({
     <>
       {/* Audio status message */}
       {audioError && (
-        <Alert variant="warning" className="mb-4">
+        <Alert variant="destructive" className="mb-4">
           <AlertDescription>
             {audioError}
             {audioError.includes('error') && (

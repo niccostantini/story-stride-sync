@@ -23,7 +23,7 @@ export const useAudioSession = (
   const maxRetries = 3;
   const maxSilentAudioAttempts = 2; // Limit silent audio reset attempts
   
-  // Use our new audio content management hook
+  // Use our audio content management hook
   const { 
     processedUrls, 
     isPreloading, 
@@ -33,19 +33,17 @@ export const useAudioSession = (
   
   // Get current audio URL based on timer state
   const getCurrentAudioUrl = (): string | null => {
-    if (!audioUrl) return null;
+    if (!processedUrls.length) return getSilentAudioUrl();
     
     // For session-mode audio (single file)
-    if (typeof audioUrl === 'string') {
-      return processedUrls[0] || null;
-    }
+    if (processedUrls.length === 1) return processedUrls[0];
     
     // For set-based audio array
-    if (Array.isArray(audioUrl) && timer) {
+    if (timer) {
       return getUrlForSet(timer.currentSetIndex);
     }
     
-    return null;
+    return processedUrls[0]; // Default to first audio if no timer
   };
   
   // Reset to silent audio for error recovery
@@ -90,7 +88,7 @@ export const useAudioSession = (
   
   // Initialize audio element when component mounts
   useEffect(() => {
-    // Create audio element on mount
+    // Create audio element on mount if it doesn't exist
     if (!audioRef.current) {
       audioRef.current = new Audio();
       
@@ -125,6 +123,8 @@ export const useAudioSession = (
   
   // Update audio source when URL or timer state changes
   useEffect(() => {
+    if (!processedUrls.length) return;
+    
     const setupAudio = () => {
       const url = getCurrentAudioUrl();
       
@@ -140,6 +140,7 @@ export const useAudioSession = (
         return;
       }
       
+      console.log('Setting up audio with URL:', url);
       setCurrentAudioUrl(url);
       setIsLoading(true);
       setAudioError(null);
@@ -158,34 +159,20 @@ export const useAudioSession = (
         audioRef.current.currentTime = 0;
         
         // Update audio source with proper error handling
-        const loadPromise = new Promise<void>((resolve, reject) => {
-          const loadHandler = () => {
-            audioRef.current?.removeEventListener('canplaythrough', loadHandler);
-            resolve();
-          };
-          
-          const errorHandler = (err: Event) => {
-            audioRef.current?.removeEventListener('error', errorHandler as EventListener);
-            reject(new Error('Failed to load audio'));
-          };
-          
-          if (audioRef.current) {
-            audioRef.current.addEventListener('canplaythrough', loadHandler);
-            audioRef.current.addEventListener('error', errorHandler as EventListener);
-            audioRef.current.src = url;
-            audioRef.current.load();
-            audioRef.current.volume = 1.0;
-          }
-        });
+        audioRef.current.src = url;
+        audioRef.current.load();
         
-        // We don't await this promise to avoid blocking the UI
-        loadPromise
-          .then(() => setIsLoading(false))
-          .catch(err => {
-            console.warn('Audio loading failed:', err);
-            // Don't reset to silent audio here, let the error event handler do it
-          });
-          
+        audioRef.current.oncanplaythrough = () => {
+          console.log('Audio can play through now');
+          setIsLoading(false);
+        };
+        
+        audioRef.current.onerror = (e) => {
+          console.error('Audio loading error:', audioRef.current?.error);
+          setAudioError(`Failed to load audio: ${audioRef.current?.error?.message || 'Unknown error'}`);
+          setIsLoading(false);
+        };
+        
       } catch (error) {
         console.error('Audio setup error:', error);
         setAudioError('Failed to initialize audio');
@@ -193,10 +180,7 @@ export const useAudioSession = (
       }
     };
     
-    // Only setup audio when we have processed URLs and timer data
-    if (processedUrls.length > 0 && timer) {
-      setupAudio();
-    }
+    setupAudio();
   }, [processedUrls, timer?.currentSetIndex]);
   
   // Clean up URLs when component unmounts

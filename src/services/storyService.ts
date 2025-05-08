@@ -1,3 +1,4 @@
+
 import { StorySettings } from "@/types";
 
 interface StoryResult {
@@ -25,8 +26,8 @@ export async function generateStory(settings: StorySettings, totalDurationSecond
     case 'session': {
       // Generate one continuous story
       storyText = mockGenerateSessionStory(settings, targetWordCount);
-      // Use a valid silent MP3 data URL instead of placeholder
-      storyAudioUrl = 'data:audio/mp3;base64,SUQzAwAAAAABOlRJVDIAAAAZAAADSW5zdHJ1bWVudGFsIFNvdW5kIEZYAA==';
+      // Use a simplified silent MP3 data URL
+      storyAudioUrl = 'data:audio/mp3;base64,SUQzAwAAAAAAElRJVDIAAAAGAAAAU2lsZW50AA==';
       break;
     }
       
@@ -41,8 +42,8 @@ export async function generateStory(settings: StorySettings, totalDurationSecond
         const setWordCount = Math.round((setDuration / totalDurationSeconds) * targetWordCount);
         
         stories.push(mockGenerateSetStory(settings, setWordCount, index, settings.sets.length));
-        // Use valid silent MP3 data URLs with unique identifiers
-        audioUrls.push(`data:audio/mp3;base64,SUQzAwAAAAABOlRJVDIAAAAZAAADSW5zdHJ1bWVudGFsIFNvdW5kIEZYAA==`);
+        // Use simplified silent MP3 data URLs with unique identifiers
+        audioUrls.push(`data:audio/mp3;base64,SUQzAwAAAAAAElRJVDIAAAAGAAAAU2lsZW50AA==`);
       });
       
       storyText = stories;
@@ -70,8 +71,8 @@ export async function generateStory(settings: StorySettings, totalDurationSecond
             set.intervals.length,
             interval.label
           ));
-          // Use valid silent MP3 data URLs with unique identifiers
-          audioUrls.push(`data:audio/mp3;base64,SUQzAwAAAAABOlRJVDIAAAAZAAADSW5zdHJ1bWVudGFsIFNvdW5kIEZYAA==`);
+          // Use simplified silent MP3 data URLs with unique identifiers
+          audioUrls.push(`data:audio/mp3;base64,SUQzAwAAAAAAElRJVDIAAAAGAAAAU2lsZW50AA==`);
           intervalCounter++;
         });
       });
@@ -83,12 +84,16 @@ export async function generateStory(settings: StorySettings, totalDurationSecond
       
     default:
       storyText = "Once upon a time...";
-      storyAudioUrl = 'data:audio/mp3;base64,SUQzAwAAAAABOlRJVDIAAAAZAAADSW5zdHJ1bWVudGFsIFNvdW5kIEZYAA==';
+      storyAudioUrl = 'data:audio/mp3;base64,SUQzAwAAAAAAElRJVDIAAAAGAAAAU2lsZW50AA==';
   }
   
   const wordCount = typeof storyText === 'string' 
     ? countWords(storyText)
     : storyText.reduce((total, text) => total + countWords(text), 0);
+  
+  // Log the generated story for debugging
+  console.log('Generated story text:', typeof storyText === 'string' ? storyText.substring(0, 100) + '...' : 'Multiple story segments');
+  console.log('Generated audio URLs:', storyAudioUrl);
   
   return {
     storyText,

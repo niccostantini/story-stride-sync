@@ -27,8 +27,13 @@ const AudioStatus: React.FC<AudioStatusProps> = ({
     <>
       {/* Audio status message */}
       {audioError && (
-        <Alert variant="destructive" className="mb-4">
-          <AlertDescription>{audioError}</AlertDescription>
+        <Alert variant="warning" className="mb-4">
+          <AlertDescription>
+            {audioError}
+            {audioError.includes('error') && (
+              <div className="mt-1 text-sm">Story will continue without audio narration.</div>
+            )}
+          </AlertDescription>
         </Alert>
       )}
       
@@ -60,6 +65,9 @@ const AudioStatus: React.FC<AudioStatusProps> = ({
         {isLoading && (
           <Badge variant="outline" className="animate-pulse">Loading Audio</Badge>
         )}
+        {audioError && (
+          <Badge variant="outline" className="bg-orange-100 text-orange-800">Audio Unavailable</Badge>
+        )}
       </div>
       
       {/* Timer Display */}
@@ -75,7 +83,7 @@ const AudioStatus: React.FC<AudioStatusProps> = ({
             className={cn(
               "w-2 bg-purple rounded-full transition-all duration-300",
               isLoading ? "animate-pulse h-1" :
-              timer?.isRunning && !timer.isPaused && !timer.isInPause && !timer.isInRest
+              timer?.isRunning && !timer.isPaused && !timer.isInPause && !timer.isInRest && !audioError
                 ? `animate-audio-wave-${i + 1}`
                 : "h-1"
             )}

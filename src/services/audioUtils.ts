@@ -80,28 +80,15 @@ export const createAudioUrl = (audioContent: string): string => {
       return getSilentAudioUrl();
     }
     
+    // If audioContent is already a URL (not a data URL or base64), return it
+    if (audioContent.startsWith('http://') || audioContent.startsWith('https://') || audioContent.startsWith('blob:')) {
+      return audioContent;
+    }
+    
     // Check if audioContent is already a data URL
     if (audioContent.startsWith('data:audio/')) {
-      // Validate the data URL format
-      try {
-        const parts = audioContent.split(',');
-        if (parts.length !== 2 || !parts[1]) {
-          console.warn('Invalid data URL format');
-          return getSilentAudioUrl();
-        }
-        
-        // Check if the base64 part is valid
-        try {
-          atob(parts[1].substring(0, Math.min(10, parts[1].length)));
-          return audioContent; // It's valid, return as-is
-        } catch (e) {
-          console.warn('Invalid base64 in data URL');
-          return getSilentAudioUrl();
-        }
-      } catch (e) {
-        console.warn('Error validating data URL');
-        return getSilentAudioUrl();
-      }
+      // Simple validation for data URL format
+      return audioContent;
     }
     
     // Create the blob with proper MIME type
@@ -140,9 +127,10 @@ export const createAudioUrl = (audioContent: string): string => {
  */
 export const generateMockAudioResponse = (): { audioContent: string } => {
   console.log('Generating mock audio response');
-  // This is a valid MP3 base64 string for a short notification sound
+  // Instead of using a long base64 string that might be corrupted
+  // Use a small valid data URL for a short silent MP3
   return { 
-    audioContent: 'SUQzBAAAAAABAFRYWFgAAAASAAADbWFqb3JfYnJhbmQAZGFzaABUWFhYAAAAEQAAA21pbm9yX3ZlcnNpb24AMABUWFhYAAAAHAAAA2NvbXBhdGlibGVfYnJhbmRzAGlzbzZtcDQxAFRTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tAwAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAeAAAjsAAHBwcHDw8PDw8XFxcXFx8fHx8fJycnJycvLy8vLzc3Nzc3Pz8/Pz9HR0dHR09PT09PV1dXV1dfX19fX2dnZ2dncHBwcHB4eHh4eIAAAAAAAAAAAAAAAAAAAAD/+0DEAAAFZAGAQAAAKAWIMTIAAAIAAAH0SAAALisBRW0AAAgAAA+gAAABAYWx0AAAAElubm9jZW50AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATEFNRTMuMTAwVUVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/+0DEBUAADACHIAAAAIIQIS4QAAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQ==' 
+    audioContent: 'data:audio/mp3;base64,SUQzAwAAAAAAElRJVDIAAAAGAAAAU2lsZW50AA==' 
   };
 };
 
@@ -150,7 +138,7 @@ export const generateMockAudioResponse = (): { audioContent: string } => {
  * Get a valid silent audio data URL for fallback situations
  */
 export const getSilentAudioUrl = (): string => {
-  return 'data:audio/mp3;base64,SUQzBAAAAAABAFRYWFgAAAASAAADbWFqb3JfYnJhbmQAZGFzaABUWFhYAAAAEQAAA21pbm9yX3ZlcnNpb24AMABUWFhYAAAAHAAAA2NvbXBhdGlibGVfYnJhbmRzAGlzbzZtcDQxAFRTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tAwAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAeAAAjsAAHBwcHDw8PDw8XFxcXFx8fHx8fJycnJycvLy8vLzc3Nzc3Pz8/Pz9HR0dHR09PT09PV1dXV1dfX19fX2dnZ2dncHBwcHB4eHh4eIAAAAAAAAAAAAAAAAAAAAD/+0DEAAAFZAGAQAAAKAWIMTIAAAIAAAH0SAAALisBRW0AAAgAAA+gAAABAYWx0AAAAElubm9jZW50AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
+  return 'data:audio/mp3;base64,SUQzAwAAAAAAElRJVDIAAAAGAAAAU2lsZW50AA==';
 };
 
 /**

@@ -55,38 +55,46 @@ export const useAudioPlayback = ({
       onPlay();
       
       if (audioRef.current && (!timer.isInPause && !timer.isInRest)) {
-        const playPromise = audioRef.current.play();
-        if (playPromise) {
-          playPromise
-            .then(() => {
-              console.log('Playback started successfully');
-              errorRetryCount.current = 0;
-            })
-            .catch(err => {
-              console.error('Playback start error:', err);
-              
-              // More detailed error handling
-              if (err.name === 'NotAllowedError') {
-                toast({
-                  title: "Interaction Required",
-                  description: "Browser requires user interaction before playing audio",
-                  variant: "default",
-                });
-              } else if (err.name === 'AbortError') {
-                // Playback was aborted, likely due to src change - can safely ignore
-                console.log('Playback aborted, likely due to src change');
-              } else {
-                // For other errors, increment retry counter
-                errorRetryCount.current++;
-                
-                if (errorRetryCount.current >= maxRetries) {
-                  setAudioError(`Playback error: ${err.message}`);
-                  // Don't call resetToSilentAudio here as it could cause a loop
-                }
-              }
-            });
-        }
+        tryPlayAudio();
       }
+    }
+  };
+  
+  // Helper function to try playing audio with error handling
+  const tryPlayAudio = () => {
+    if (!audioRef.current) return;
+    
+    const playPromise = audioRef.current.play();
+    
+    if (playPromise) {
+      playPromise
+        .then(() => {
+          console.log('Playback started successfully');
+          errorRetryCount.current = 0;
+        })
+        .catch(err => {
+          console.error('Playback start error:', err);
+          
+          // More detailed error handling
+          if (err.name === 'NotAllowedError') {
+            toast({
+              title: "Interaction Required",
+              description: "Browser requires user interaction before playing audio",
+              variant: "default",
+            });
+          } else if (err.name === 'AbortError') {
+            // Playback was aborted, likely due to src change - can safely ignore
+            console.log('Playback aborted, likely due to src change');
+          } else {
+            // For other errors, increment retry counter
+            errorRetryCount.current++;
+            
+            if (errorRetryCount.current >= maxRetries) {
+              setAudioError(`Playback error: ${err.message}`);
+              // We'll continue normally without silent audio to prevent loops
+            }
+          }
+        });
     }
   };
   
@@ -160,6 +168,7 @@ export const useAudioPlayback = ({
       setIsLoading(false);
       errorRetryCount.current = 0;
       
+      // Only show toast if not already playing
       if (!timer?.isRunning) {
         toast({
           title: "Audio ready",
@@ -168,48 +177,40 @@ export const useAudioPlayback = ({
       }
     };
     
-    // Track number of silent audio resets to prevent infinite loops
-    const silentAudioResets = new WeakMap();
-    
     const handleError = (e: Event) => {
       const error = (e.target as HTMLAudioElement).error;
-      console.error('Audio playback error:', error);
+      console.error('Audio playback error:', error?.code, error?.message);
       
       // Check if we're already playing silent audio to prevent infinite loops
       const audioSrc = audio.src || '';
-      const isSilentAudio = audioSrc.includes('data:audio/mp3;base64') && audioSrc === getSilentAudioUrl();
+      const isSilentAudio = audioSrc === getSilentAudioUrl();
       
       if (isSilentAudio) {
         // If we're already playing silent audio and still getting errors,
         // don't try to reset to silent audio again
         console.warn('Error with silent audio, not attempting further resets');
-        setAudioError('Audio unavailable. Please try again later.');
+        setAudioError('Audio unavailable. Story will continue without audio.');
         setIsLoading(false);
         return;
       }
       
+      // Increment error counter
       errorRetryCount.current++;
       
       if (errorRetryCount.current >= maxRetries) {
+        // After max retries, just show error but continue without audio
         setAudioError(`Audio error: ${error?.message || 'Unknown error'}`);
         setIsLoading(false);
         
         toast({
           title: "Audio Error",
-          description: `Playback error: ${error?.message || 'Unknown error'}`,
+          description: "Continue with your story without audio narration",
           variant: "destructive",
         });
-        
-        // Only reset to silent audio if we're not already playing it
-        if (!isSilentAudio) {
-          console.log('Resetting to silent audio after max retries');
-          resetToSilentAudio();
-        }
-      } else {
-        console.log(`Audio error #${errorRetryCount.current}, trying silent audio`);
-        if (!isSilentAudio) {
-          resetToSilentAudio();
-        }
+      } else if (!isSilentAudio) {
+        // Only try silent audio if not already using it
+        console.log(`Audio error #${errorRetryCount.current}, using silent audio`);
+        resetToSilentAudio();
       }
     };
     
@@ -248,28 +249,13 @@ export const useAudioPlayback = ({
     const audio = audioRef.current;
     if (!audio || !timer) return;
     
-    // Handle normal play/pause based on timer
+    // Handle audio playback based on timer state
     if (timer.isRunning && !timer.isPaused) {
       if (timer.isInPause || timer.isInRest) {
         audio.pause();
-      } else {
-        if (audioError) return;
-        
-        const playPromise = audio.play();
-        
-        if (playPromise !== undefined) {
-          playPromise.catch(error => {
-            console.warn('Non-critical playback error:', error);
-            
-            if (error.name === 'NotAllowedError') {
-              toast({
-                title: "Tap to play",
-                description: "Please tap play to start audio",
-                variant: "default",
-              });
-            }
-          });
-        }
+      } else if (!audioError) {
+        // Only try to play if there are no errors
+        tryPlayAudio();
       }
     } else {
       audio.pause();
@@ -281,8 +267,7 @@ export const useAudioPlayback = ({
     timer?.isInRest,
     timer?.currentSetIndex, 
     timer?.currentIntervalIndex,
-    audioError,
-    toast
+    audioError
   ]);
   
   // Handle timer reset

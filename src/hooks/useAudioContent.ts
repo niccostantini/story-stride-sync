@@ -26,72 +26,53 @@ export const useAudioContent = (audioUrl: string | string[] | null) => {
     });
     preloadedAudioRefs.current = [];
     
-    if (!audioUrl) return;
+    if (!audioUrl) {
+      // If no audio URL is provided, use silent audio
+      console.log('No audio URL provided, using silent audio');
+      setProcessedUrls([getSilentAudioUrl()]);
+      setIsPreloading(false);
+      return;
+    }
     
     const urls = Array.isArray(audioUrl) ? audioUrl : [audioUrl];
-    if (urls.length === 0) return;
+    if (urls.length === 0) {
+      // If empty array, use silent audio
+      console.log('Empty audio URL array, using silent audio');
+      setProcessedUrls([getSilentAudioUrl()]);
+      setIsPreloading(false);
+      return;
+    }
     
     // Start preloading process
     setIsPreloading(true);
+    console.log('Starting audio preloading process with URLs:', urls);
     
-    const preloadAudioFiles = async () => {
-      const processed: string[] = [];
-      let loadedCount = 0;
-      
-      // Process each URL sequentially
-      for (const url of urls) {
-        try {
-          // Create a new audio element for preloading
-          const audio = new Audio();
-          
-          // Track loading progress
-          audio.addEventListener('canplaythrough', () => {
-            loadedCount++;
-            setLoadingProgress(Math.floor((loadedCount / urls.length) * 100));
-          });
-          
-          // Handle loading errors
-          audio.addEventListener('error', () => {
-            console.warn(`Failed to preload audio: ${url}`);
-            loadedCount++;
-            setLoadingProgress(Math.floor((loadedCount / urls.length) * 100));
-          });
-          
-          // Start loading
-          audio.src = url;
-          audio.load();
-          
-          // Store for later cleanup
-          preloadedAudioRefs.current.push(audio);
-          processed.push(url);
-        } catch (error) {
-          console.error('Audio preloading error:', error);
-          // Use silent audio as fallback
-          processed.push(getSilentAudioUrl());
-        }
+    // Directly use the provided URLs if they're already data URLs or URLs
+    // This avoids unnecessary processing that might corrupt the audio
+    const processed = urls.map(url => {
+      // Check if it's already a URL (data: or http: or https: or blob:)
+      if (url.startsWith('data:') || url.startsWith('http:') || url.startsWith('https:') || url.startsWith('blob:')) {
+        return url;
       }
       
-      setProcessedUrls(processed);
-      setIsPreloading(false);
-      
-      if (processed.length > 0) {
-        toast({
-          title: "Audio Ready",
-          description: `${processed.length} audio files prepared for playback`,
-        });
+      // If it's a base64 string, convert it to a data URL
+      try {
+        return createAudioUrl(url);
+      } catch (error) {
+        console.error('Audio processing error:', error);
+        return getSilentAudioUrl();
       }
-    };
+    });
     
-    preloadAudioFiles();
+    setProcessedUrls(processed);
+    setLoadingProgress(100); // Since we're not actually preloading
+    setIsPreloading(false);
     
-    // Cleanup function
-    return () => {
-      preloadedAudioRefs.current.forEach(audio => {
-        audio.src = '';
-        audio.load();
-      });
-      preloadedAudioRefs.current = [];
-    };
+    console.log('Audio URLs processed:', processed);
+    toast({
+      title: "Audio Ready",
+      description: `Audio prepared for playback`,
+    });
   }, [audioUrl, toast]);
   
   // Get the appropriate URL for the current set

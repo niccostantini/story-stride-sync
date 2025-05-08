@@ -30,7 +30,12 @@ const StoryDisplay: React.FC<StoryDisplayProps> = ({ session, timer }) => {
     // For session mode (one continuous story)
     if (session.storyMode === "session") {
       const text = typeof session.storyText === 'string' ? session.storyText : session.storyText.join("\n\n");
-      return <SessionModeStory storyText={text} timer={timer} totalDuration={calculateTotalDuration()} />;
+      return <SessionModeStory 
+        storyText={text} 
+        timer={timer} 
+        totalDuration={calculateTotalDuration()} 
+        session={session}
+      />;
     }
     
     // For set mode (one story per set)

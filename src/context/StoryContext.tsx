@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { StorySession, StorySettings, AppScreen, Timer } from '@/types';
+import { StorySession, StorySettings, AppScreen, Timer, generateId, WorkoutSet, IntervalItem } from '@/types';
 import { generateStory } from '@/services/storyService';
 import { useToast } from '@/hooks/use-toast';
 
@@ -33,7 +33,28 @@ export const StoryProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       setError(null);
       setCurrentScreen(AppScreen.GENERATING);
 
-      const newSession = await generateStory(settings);
+      // Calculate total target word count based on workout duration
+      const totalWorkoutDuration = settings.sets.reduce((total, set) => {
+        const setDuration = set.intervals.reduce((sum, interval) => sum + interval.duration, 0);
+        return total + setDuration;
+      }, 0);
+      
+      // Generate story based on the settings
+      const storyResult = await generateStory(settings, totalWorkoutDuration);
+      
+      // Create a completed session
+      const newSession: StorySession = {
+        id: generateId(),
+        sets: settings.sets,
+        storyMode: settings.storyMode,
+        genre: settings.genre,
+        language: settings.language,
+        storyText: storyResult.storyText,
+        storyAudioUrl: storyResult.storyAudioUrl,
+        wordCount: storyResult.wordCount,
+        createdAt: new Date()
+      };
+      
       setSession(newSession);
       setCurrentScreen(AppScreen.PLAYER);
       

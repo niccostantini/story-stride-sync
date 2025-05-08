@@ -1,198 +1,267 @@
-import { StorySettings, StorySession } from '@/types';
-import { textToSpeech, createAudioUrl } from './ttsService';
 
-/**
- * Generate story and convert to audio 
- */
-export const generateStory = async (settings: StorySettings): Promise<StorySession> => {
-  try {
-    // Calculate total duration including pauses for interval mode
-    const intervalPauseTotal = settings.isIntervalMode 
-      ? (settings.intervalCount - 1) * (settings.pauseDurationSeconds / 60) 
-      : 0;
+import { StorySettings } from "@/types";
+
+interface StoryResult {
+  storyText: string | string[];
+  storyAudioUrl: string | string[] | null;
+  wordCount: number;
+}
+
+export async function generateStory(settings: StorySettings, totalDurationSeconds: number): Promise<StoryResult> {
+  // In a real app, this would connect to an actual API
+  console.log('Generating story with settings:', settings);
+  
+  // Wait for a mock delay to simulate API call
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  
+  // Calculate target word count based on reading rate and duration
+  const readingRate = 2.5; // words per second
+  const targetWordCount = Math.round(totalDurationSeconds * readingRate);
+  
+  let storyText: string | string[];
+  let storyAudioUrl: string | string[] | null;
+  
+  // Generate story based on story mode
+  switch (settings.storyMode) {
+    case 'session': {
+      // Generate one continuous story
+      storyText = mockGenerateSessionStory(settings, targetWordCount);
+      storyAudioUrl = 'data:audio/mp3;base64,PLACEHOLDER_SESSION_AUDIO';
+      break;
+    }
       
-    // Calculate actual workout time (excluding pauses)
-    const totalDurationMinutes = settings.isIntervalMode 
-      ? settings.intervalCount * settings.intervalDurationMinutes 
-      : settings.durationMinutes;
-    
-    const targetWordCount = Math.round(totalDurationMinutes * 140);
-    
-    // Generate story text (currently using mock)
-    const prompt = createStoryPrompt(settings, targetWordCount);
-    const storyText = await mockGenerateStory(prompt, settings);
-    
-    // Convert text to speech using Google Cloud TTS API
-    let audioUrl = null;
-    try {
-      // Map language code from settings to expected Google TTS format
-      const languageCode = mapLanguageCode(settings.language);
+    case 'set': {
+      // Generate one story per set
+      const stories: string[] = [];
+      const audioUrls: string[] = [];
       
-      const ttsResponse = await textToSpeech({
-        text: storyText,
-        languageCode: languageCode
+      settings.sets.forEach((set, index) => {
+        // Calculate word count for this set based on proportion of exercise time
+        const setDuration = set.intervals.reduce((sum, interval) => sum + interval.duration, 0);
+        const setWordCount = Math.round((setDuration / totalDurationSeconds) * targetWordCount);
+        
+        stories.push(mockGenerateSetStory(settings, setWordCount, index, settings.sets.length));
+        audioUrls.push(`data:audio/mp3;base64,PLACEHOLDER_SET_AUDIO_${index}`);
       });
       
-      // Convert base64 audio to URL
-      audioUrl = createAudioUrl(ttsResponse.audioContent);
-    } catch (error) {
-      console.error('TTS conversion failed:', error);
-      // Continue with null audio URL if TTS fails
+      storyText = stories;
+      storyAudioUrl = audioUrls;
+      break;
     }
-
-    // Create session object
-    const newSession: StorySession = {
-      id: generateId(),
-      durationMinutes: totalDurationMinutes + intervalPauseTotal,
-      genre: settings.genre,
-      language: settings.language,
-      storyText: storyText,
-      storyAudioUrl: audioUrl,
-      wordCount: countWords(storyText),
-      isIntervalMode: settings.isIntervalMode,
-      intervalCount: settings.intervalCount,
-      intervalDurationMinutes: settings.intervalDurationMinutes,
-      pauseDurationSeconds: settings.pauseDurationSeconds,
-      createdAt: new Date(),
-    };
-
-    return newSession;
-  } catch (error) {
-    console.error('Story generation failed:', error);
-    throw error;
+      
+    case 'interval': {
+      // Generate one story per interval
+      const stories: string[] = [];
+      const audioUrls: string[] = [];
+      let intervalCounter = 0;
+      
+      settings.sets.forEach((set, setIndex) => {
+        set.intervals.forEach((interval, intervalIndex) => {
+          // Calculate word count for this interval based on proportion of time
+          const intervalWordCount = Math.round((interval.duration / totalDurationSeconds) * targetWordCount);
+          
+          stories.push(mockGenerateIntervalStory(
+            settings, 
+            intervalWordCount, 
+            setIndex, 
+            settings.sets.length,
+            intervalIndex,
+            set.intervals.length,
+            interval.label
+          ));
+          audioUrls.push(`data:audio/mp3;base64,PLACEHOLDER_INTERVAL_AUDIO_${intervalCounter}`);
+          intervalCounter++;
+        });
+      });
+      
+      storyText = stories;
+      storyAudioUrl = audioUrls;
+      break;
+    }
+      
+    default:
+      storyText = "Once upon a time...";
+      storyAudioUrl = 'data:audio/mp3;base64,PLACEHOLDER_AUDIO';
   }
-};
-
-/**
- * Map app language code to Google TTS language code format
- */
-const mapLanguageCode = (language: string): string => {
-  const langMap: Record<string, string> = {
-    'en': 'en-US',
-    'es': 'es-ES',
-    'fr': 'fr-FR',
-    'de': 'de-DE',
-    'it': 'it-IT'
-  };
   
-  return langMap[language] || 'en-US';
-};
+  const wordCount = typeof storyText === 'string' 
+    ? countWords(storyText)
+    : storyText.reduce((total, text) => total + countWords(text), 0);
+  
+  return {
+    storyText,
+    storyAudioUrl,
+    wordCount
+  };
+}
 
-// Helper functions moved from useStorySession
-function generateId(): string {
-  return Math.random().toString(36).substring(2, 15);
+// Mock story generation functions
+function mockGenerateSessionStory(settings: StorySettings, wordCount: number): string {
+  const genres = settings.genre.join(', ');
+  
+  return `
+# The Adventure Begins
+
+In a world where anything seemed possible, Alex stood at the edge of the mountain trail, gazing into the vast expanse before them. The sunrise painted the sky with hues of orange and pink, promising a new day filled with challenges and rewards. This was going to be no ordinary journey.
+
+As the cool morning air filled their lungs, Alex adjusted the backpack straps and took the first step forward. Each movement was deliberate, each breath measured. The path ahead twisted through dense forest and open meadows, a perfect metaphor for the journey of life itself.
+
+"One step at a time," Alex whispered, repeating the mantra that had carried them through countless challenges before.
+
+## The Forest Path
+
+The trail soon led into a dense forest where sunlight filtered through the canopy, creating dappled patterns on the ground. The scent of pine and earth filled the air as Alex maintained a steady pace.
+
+"Keep pushing," came the inner voice, stronger with each step forward.
+
+Small woodland creatures scurried away as Alex moved through their territory, a reminder that everyone has their own path, their own journey to complete.
+
+The forest gradually thinned, revealing a steep incline ahead. Alex's muscles tensed in anticipation, ready for the challenge that would push both body and mind to their limits.
+
+## The Ascent
+
+The climb was relentless. Rocks shifted beneath Alex's feet as the trail grew steeper. Sweat beaded on their forehead despite the cool mountain air. Yet with each difficult step, a sense of accomplishment grew stronger.
+
+"This is what I trained for," Alex thought, feeling the familiar burn in their muscles, the quickening of breath, the steady rhythm of their heart.
+
+At times, the path seemed to disappear entirely, forcing Alex to make choices, to forge ahead into the unknown. Isn't that what life was all about? Finding your way when the path wasn't clear?
+
+## The Summit
+
+Finally, after what seemed like hours of climbing, Alex reached a plateau. The view was breathtaking—mountains extending beyond the horizon, valleys carved by ancient rivers, clouds floating below like a sea of white.
+
+Alex sat on a sun-warmed rock, taking deep breaths, allowing their heart rate to slow. This moment of rest was well-earned, but the journey was far from over.
+
+The descent would bring its own challenges. Different muscles would ache, different skills would be tested. But that was for later. For now, there was only this perfect moment of achievement, of being exactly where they needed to be.
+
+## The Return
+
+The journey back always seemed quicker, Alex had noticed on previous adventures. Perhaps it was familiarity with the trail, or perhaps it was the pull of home that quickened one's steps.
+
+As Alex navigated the descent, careful to avoid loose stones and slippery patches, thoughts turned to the next challenge, the next mountain to climb. That was the beauty of growth—there was always another summit waiting, another opportunity to push beyond perceived limitations.
+
+The forest welcomed Alex back with its cool shade and gentle sounds. Birds called to one another overhead, and somewhere in the distance, water trickled over rocks. These simple pleasures meant so much more after the exertion of the climb.
+
+## Homecoming
+
+As the trail finally leveled out, Alex felt a profound sense of completion, of having come full circle. This journey, like all journeys, had changed them in subtle ways—strengthened muscles, sharpened focus, deepened resolve.
+
+Tomorrow would bring new challenges, new mountains to climb. But for now, Alex had proven once again that with determination and perseverance, any summit could be reached.
+
+The final steps of the trail brought Alex back to the starting point, but not as the same person who had set out hours earlier. Every journey leaves its mark, every challenge overcome builds character.
+
+And that was the true reward of any adventure—not just reaching the destination, but becoming more through the journey itself.
+`;
+}
+
+function mockGenerateSetStory(settings: StorySettings, wordCount: number, setIndex: number, totalSets: number): string {
+  const genres = settings.genre.join(', ');
+  
+  if (setIndex === 0) {
+    // First set intro
+    return `
+# The Challenge Begins
+
+The ancient temple stood before Maya, its stone facade weathered by centuries of rain and wind. She had trained for months for this moment, studying the legends, preparing her body and mind for the trials that awaited inside.
+
+"The Temple of Five Trials," she whispered, the words carrying on the gentle breeze. According to the manuscripts, only those who completed all five challenges would discover the temple's greatest secret.
+
+Maya took a deep breath, centered herself, and stepped through the massive doorway. The stone door slid closed behind her with a definitive thud, sealing her inside. There was no turning back now.
+
+The first chamber was dimly lit by torches that seemed to ignite spontaneously as she entered. In the center of the room stood a stone pedestal with ancient writing carved into its surface.
+
+"To proceed, prove your strength is matched only by your endurance," Maya read aloud, translating the script.
+
+Suddenly, the floor began to tremble. Sections of the stone shifted, creating an obstacle course of varying platforms at different heights. Maya understood immediately—this was the first trial.
+
+She began moving through the course, jumping from platform to platform, some stable, others shifting under her weight. Her muscles burned with exertion, but her training served her well as she navigated the increasingly challenging path.
+
+With a final leap, Maya landed on a solid platform that glowed with a soft blue light. The trembling stopped, and a doorway appeared in the far wall, leading deeper into the temple.
+
+"One down," she said, catching her breath. "Four to go."
+`;
+  } else if (setIndex === totalSets - 1) {
+    // Final set conclusion
+    return `
+# The Final Challenge
+
+Maya stood before the entrance to the fifth and final chamber, her body tired but her spirit unbroken. She had overcome four grueling trials, each testing different aspects of her physical and mental abilities.
+
+"This is it," she told herself, pressing her palm against the warm stone door. It recognized her touch as that of a worthy challenger and slowly swung open.
+
+Unlike the previous chambers, this one was flooded with light from an opening in the ceiling. In the center stood not an obstacle or puzzle, but a simple meditation cushion placed before a small pool of crystal-clear water.
+
+Confused but intrigued, Maya approached and sat on the cushion. The water in the pool began to shimmer, and a voice seemed to emanate from everywhere and nowhere.
+
+"The final trial is not of the body, but of the mind," it said. "You must quiet your thoughts and find perfect stillness within."
+
+Maya closed her eyes and focused on her breathing, drawing on the meditation techniques she had practiced for years. It was challenging to calm her racing heart and excited mind after the physical exertion of the previous chambers, but gradually, she found her center.
+
+As her breathing slowed and her thoughts cleared, the pool before her began to glow with an intense light. Images formed on its surface—visions of ancient knowledge, forgotten techniques, and wisdom long lost to time.
+
+Maya remained in this state for what could have been minutes or hours, absorbing the knowledge being shared with her. When she finally opened her eyes, she understood what made this temple truly special.
+
+The greatest secret wasn't a physical treasure or a magical artifact. It was knowledge—the understanding that true mastery comes from balance between physical prowess and mental discipline.
+
+As the final chamber's door opened to reveal the exit from the temple, Maya rose with new purpose. She wasn't leaving with empty hands, but with a full mind and spirit.
+
+Outside, the sun was setting, casting long shadows across the landscape. Maya took a deep breath of the fresh air and smiled. Her journey wasn't ending here—it was just beginning.
+`;
+  } else {
+    // Middle set - with cliffhanger
+    return `
+# The Third Chamber
+
+Maya wiped sweat from her brow as she entered the third chamber of the temple. The previous trials had tested her strength and agility; she wondered what challenge awaited her now.
+
+This room was larger than the others, with a high ceiling that disappeared into shadows. The air felt cooler here, with a slight mist that seemed to emanate from the walls themselves.
+
+At the center of the chamber was a series of concentric rings carved into the floor, each one separated by shallow channels of flowing water. In the very middle stood a gleaming object that Maya couldn't quite make out from the entrance.
+
+"The third trial tests your focus and precision," came a voice that seemed to resonate from the walls themselves. "Cross the rings without touching the water, and the prize is yours."
+
+Maya approached the outer edge of the first ring. What looked simple from a distance proved much more complex up close. The stone rings were narrow, barely wide enough for her feet, and they rotated slowly in alternating directions.
+
+She took a deep breath, centered herself, and stepped onto the first ring. It shifted slightly under her weight, but she maintained her balance. One down, several more to go.
+
+The second ring moved faster than the first, requiring her to time her step perfectly. Too soon, and she'd miss; too late, and she might lose balance.
+
+With a perfectly timed leap, Maya landed on the second ring. She could feel her heart pounding, but her focus remained unwavering. The third ring was moving even faster, in the opposite direction.
+
+Maya continued her careful progression, each ring presenting a new challenge. Some moved unexpectedly, others tilted when she placed her weight on them. Her muscles burned from the precise control required, but she pushed through the discomfort.
+
+As she approached the innermost ring, she could finally see what awaited her at the center: a small, blue crystal that seemed to pulse with its own inner light.
+
+With one final, perfectly executed step, Maya landed on the central platform. The rings stopped moving, and the crystal rose into the air, hovering at eye level before her.
+
+"Well done," said the voice. "You have proven your precision and focus. Take the Crystal of Clarity as proof of your accomplishment."
+
+As Maya reached for the crystal, the floor beneath her suddenly began to shake violently...
+`;
+  }
+}
+
+function mockGenerateIntervalStory(
+  settings: StorySettings, 
+  wordCount: number, 
+  setIndex: number, 
+  totalSets: number,
+  intervalIndex: number,
+  totalIntervals: number,
+  intervalLabel: string
+): string {
+  const genres = settings.genre.join(', ');
+  
+  // Create a mini-story appropriate for a single exercise interval
+  return `
+## ${intervalLabel}
+
+The ${intervalLabel} challenge required every ounce of strength and focus. As sweat beaded on her forehead, Maya pushed through the burning sensation in her muscles, knowing that each moment of exertion brought her closer to mastery.
+
+"Mind over matter," she repeated to herself with each movement, finding rhythm in the challenge. The ancient masters had designed these trials to forge not just stronger bodies, but unbreakable spirits.
+`;
 }
 
 function countWords(text: string): number {
   return text.trim().split(/\s+/).length;
-}
-
-function createStoryPrompt(settings: StorySettings, targetWordCount: number): string {
-  const { genre, language, isIntervalMode, intervalCount } = settings;
-  
-  let prompt = `Write a captivating short story`;
-  
-  if (genre.length > 0) {
-    if (genre.length === 1) {
-      prompt += ` in the ${genre[0].toLowerCase()} genre`;
-    } else {
-      const lastGenre = genre[genre.length - 1];
-      const otherGenres = genre.slice(0, -1).map(g => g.toLowerCase());
-      prompt += ` that combines elements of ${otherGenres.join(', ')} and ${lastGenre.toLowerCase()}`;
-    }
-  }
-  
-  if (isIntervalMode) {
-    prompt += ` with exactly ${intervalCount} chapters of equal length`;
-  }
-  
-  prompt += `. The total word count should be approximately ${targetWordCount} words.`;
-  prompt += ` The story should be engaging, immersive, and suitable for listening to during a workout.`;
-  
-  return prompt;
-}
-
-// Mock story generation (keeping the existing functions from useStorySession)
-async function mockGenerateStory(prompt: string, settings: StorySettings): Promise<string> {
-  await new Promise(resolve => setTimeout(resolve, 3000)); // Simulate API delay
-  
-  const isIntervalMode = settings.isIntervalMode;
-  const intervalCount = settings.intervalCount;
-  
-  let story = "";
-  
-  // Generate a different story based on the genres
-  const genres = settings.genre.map(g => g.toLowerCase());
-  const primaryGenre = genres[0] || "adventure";
-  
-  if (isIntervalMode) {
-    for (let i = 1; i <= intervalCount; i++) {
-      story += `Chapter ${i}\n\n`;
-      
-      if (genres.includes("adventure") || genres.includes("fantasy")) {
-        story += `The journey continued as our hero faced the ${i === intervalCount ? 'final' : i === 1 ? 'first' : i === 2 ? 'second' : 'next'} challenge. `;
-        story += mockStorySegment(primaryGenre, 120); // Shorter segment for each interval
-        story += "\n\n";
-      } else if (genres.includes("science fiction")) {
-        story += `The ${i === intervalCount ? 'final phase' : `phase ${i}`} of the mission began with an unexpected discovery. `;
-        story += mockStorySegment(primaryGenre, 120);
-        story += "\n\n";
-      } else {
-        story += mockStorySegment(primaryGenre, 140);
-        story += "\n\n";
-      }
-    }
-  } else {
-    // Single continuous story
-    const totalWordCount = settings.durationMinutes * 140;
-    
-    // Generate an intro that incorporates all selected genres
-    let intro = "In a world where ";
-    if (genres.includes("science fiction") && genres.includes("fantasy")) {
-      intro += "technology and magic coexisted, ";
-    } else if (genres.includes("adventure") && genres.includes("mystery")) {
-      intro += "every journey contained hidden secrets, ";
-    } else if (genres.includes("horror") && genres.includes("thriller")) {
-      intro += "fear lurked around every corner, ";
-    } else {
-      intro += "anything was possible, ";
-    }
-    
-    story = intro + mockStorySegment(primaryGenre, totalWordCount - 10);
-  }
-  
-  return story;
-}
-
-function mockStorySegment(genre: string, wordCount: number): string {
-  // These are placeholder story segments from useStorySession
-  const segments: Record<string, string[]> = {
-    "adventure": [
-      "The mountain trail twisted ahead, challenging Emma with each step. Her backpack felt heavier today, but the promise of reaching the summit before sunset kept her pushing forward. The forest around her buzzed with life, birds calling overhead as dappled sunlight broke through the canopy. She paused at a clearing, catching her breath while checking her map. The final ascent would be the steepest, but the view would be worth every aching muscle. As she adjusted her hiking poles and took a swig of water, Emma noticed something unusual—a faint path branching off from the main trail, barely visible among the ferns and undergrowth. It wasn't marked on her map. Curiosity piqued, she hesitated only briefly before stepping onto the mysterious path. Adventure, after all, meant embracing the unexpected.",
-      "The cave entrance loomed before Marcus, a dark mouth in the cliff face that seemed to exhale cool, damp air. His headlamp cut a weak beam into the darkness, revealing glimpses of stalactites hanging from the ceiling like stone teeth. The expedition had taken weeks to prepare, but now, standing at the threshold of the unexplored cavern, doubt crept in. The local legends about this place were probably just stories, he told himself, tightening the straps on his gear. With a deep breath, Marcus stepped into the darkness, the sound of water dripping somewhere in the distance serving as his only guide. Each careful step took him deeper into the earth, where no one had ventured before. The narrow passage suddenly widened, and his light couldn't reach the far walls of what must have been an enormous chamber. As the beam swept across the floor, something reflected back—not the dull gleam of wet stone, but a metallic glint that didn't belong in this untouched place."
-    ],
-    "fantasy": [
-      "In the village of Elderwood, where the trees whispered secrets and the river sang ancient songs, lived a young woman named Lyra who could speak to shadows. Not the ordinary shadows cast by objects in sunlight, but the deeper, older shadows that lingered in forgotten corners and hidden places. They told her stories of distant lands and times long past, sharing wisdom that had slipped from human memory. On the eve of the summer solstice, when the veil between worlds grew thin, the shadows grew restless. They swirled around Lyra as she walked home under the twilight sky, their voices more urgent than she had ever heard them. Something was coming, they warned—something that had slept beneath the mountains for a thousand years and now stirred, stretching its ancient power toward the surface world. The village elders dismissed her warnings as fantasy, but Lyra knew better. As darkness fell completely, she packed a small bag and slipped out her bedroom window, following the whispered guidance of her shadowy companions toward the distant mountains, where fate awaited."
-    ],
-    "science fiction": [
-      "Dr. Eliza Chen stared at the data scrolling across her holographic display, the blue light illuminating her face in the dim laboratory. The quantum readings defied conventional physics—particles communicating across vast distances instantly, as if space itself meant nothing to them. She had discovered something fundamental about reality, something that could revolutionize space travel. If particles could communicate instantly across any distance, perhaps ships could too. The implications were staggering: instantaneous travel between star systems, no more decades-long journeys in cryosleep. Humanity could truly become an interstellar species. But as she prepared to transmit her findings to the United Earth Science Council, a message appeared on her screen from an unknown source: 'Some discoveries are not meant for humans yet.' The laboratory door sealed with a hiss, and the ventilation system switched off. Eliza felt a cold shiver run down her spine as she realized she wasn't alone in the station anymore. Something—or someone—had been watching her work, perhaps all along."
-    ],
-    "mystery": [
-      "Detective Morgan Reed stood in the rain-soaked garden, water dripping from the brim of her hat as she examined the ornate key found clutched in the victim's hand. It matched no lock in the house—she'd already checked every door, cabinet, and box. The victim, renowned historian Dr. Harrison Wells, had no enemies according to his colleagues, yet here he lay, in his own garden, clutching a mysterious key. The house itself was a historian's dream: a Victorian mansion filled with artifacts and books, each room a testament to a different era. But it was the study that drew Morgan's attention, with its walls lined with maps of places that didn't exist and photographs of people whose faces had been carefully scratched out. As the forensic team worked around her, Morgan noticed a pattern in the bookshelves—certain volumes protruded slightly more than others. When she pulled one out, she found a symbol drawn on the wall behind it, identical to the one engraved on the mysterious key. The historian had hidden something, and it had cost him his life."
-    ],
-    "horror": [
-      "The house at the end of Elm Street had been empty for decades, its windows like vacant eyes watching the neighborhood. When the Sullivan family moved in after buying it at auction, neighbors whispered about the house's past but never directly to the newcomers. Madison Sullivan, sixteen and resentful about leaving her friends behind, found herself drawn to the strange symbols carved into her bedroom closet door. They weren't obvious at first—just faint lines that caught the light at certain angles—but once she noticed them, she couldn't unsee them. Late at night, she thought she heard whispering from behind that door, even though the closet was barely deep enough for her clothes. One night, unable to sleep and annoyed by the persistent whispers, she opened the closet door forcefully, ready to prove to herself it was just the wind or the old house settling. Instead, she found the closet stretched impossibly backward, a long dark corridor where the wall should have been. And from somewhere in that impossible darkness, something was calling her name."
-    ],
-    "motivational": [
-      "Every morning for the past five years, Kai had watched the sunrise from the same bench in Memorial Park. It wasn't about the view—though the golden light spilling over the city skyline was breathtaking. It was about remembering how far he'd come. Five years ago, he couldn't walk to this bench without assistance. The doctors had said he might never walk independently again after the accident, but here he was, standing by himself on the hillside, his cane leaning unused against the bench. The journey had been grueling—countless hours of physical therapy, days when pain made even breathing seem impossible, moments of despair when giving up felt like the only sensible option. But with each small victory—wiggling his toes again, standing for ten seconds, taking his first unassisted step—Kai had rebuilt not just his body but his understanding of what human determination could achieve. As today's sun cleared the horizon, painting the clouds in brilliant orange and pink, Kai took a deep breath and smiled. Tomorrow, he would start training for the 5K he'd promised himself he'd run one day. The impossible just took a little longer."
-    ]
-  };
-
-  // Default to adventure if genre not found
-  const genreSegments = segments[genre] || segments["adventure"];
-  
-  // Select a random segment from the genre
-  const randomSegment = genreSegments[Math.floor(Math.random() * genreSegments.length)];
-  
-  return randomSegment;
 }

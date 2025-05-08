@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, SkipBack, Trash2, Volume2, VolumeX, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -6,9 +7,10 @@ import { cn } from '@/lib/utils';
 import { Timer } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 
 interface AudioPlayerProps {
-  audioUrl: string | null;
+  audioUrl: string | string[] | null;
   timer: Timer | null;
   onPlay: () => void;
   onPause: () => void;
@@ -90,17 +92,36 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     }
   };
   
-  // Initialize audio element when URL changes
+  // Get current audio URL based on timer state and story mode
+  const getCurrentAudioUrl = (): string | null => {
+    if (!audioUrl) return null;
+    
+    // If audioUrl is a string, it's a session-mode audio file
+    if (typeof audioUrl === 'string') {
+      return audioUrl;
+    }
+    
+    // If audioUrl is an array, it depends on the current set or interval
+    if (Array.isArray(audioUrl) && timer) {
+      return audioUrl[timer.currentSetIndex] || null;
+    }
+    
+    return null;
+  };
+  
+  // Initialize audio element when URL changes or timer state changes
   useEffect(() => {
-    if (audioUrl) {
-      console.log('Audio URL provided:', audioUrl);
+    const currentUrl = getCurrentAudioUrl();
+    
+    if (currentUrl) {
+      console.log('Setting audio URL:', currentUrl);
       setIsLoading(true);
       setAudioError(null);
       
       if (!audioRef.current) {
-        audioRef.current = new Audio(audioUrl);
+        audioRef.current = new Audio(currentUrl);
       } else {
-        audioRef.current.src = audioUrl;
+        audioRef.current.src = currentUrl;
       }
       
       // Configure audio element
@@ -117,20 +138,22 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       setAudioError('No audio available');
       setIsLoading(false);
     }
-  }, [audioUrl]);
+  }, [audioUrl, timer?.currentSetIndex]);
   
   // Add visible HTML audio element for debugging
   useEffect(() => {
     // Create a visible audio element for browser controls
     const createVisibleAudioElement = () => {
-      if (audioUrl && !document.getElementById('visible-audio-element')) {
+      const currentUrl = getCurrentAudioUrl();
+      
+      if (currentUrl && !document.getElementById('visible-audio-element')) {
         const audioElement = document.createElement('audio');
         audioElement.id = 'visible-audio-element';
         audioElement.controls = true;
         audioElement.style.width = '100%';
         audioElement.style.marginBottom = '10px';
         audioElement.style.display = 'none'; // Hide by default in production
-        audioElement.src = audioUrl;
+        audioElement.src = currentUrl;
         
         // In development mode, make it visible
         if (window.location.hostname === 'localhost') {
@@ -153,7 +176,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         elem.parentNode.removeChild(elem);
       }
     };
-  }, [audioUrl]);
+  }, [audioUrl, timer?.currentSetIndex]);
   
   // Set up audio event listeners
   useEffect(() => {
@@ -218,17 +241,18 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     console.log('Timer state changed:', { 
       isRunning: timer.isRunning, 
       isPaused: timer.isPaused,
-      isInPause: timer.isInPause 
+      isInPause: timer.isInPause,
+      isInRest: timer.isInRest
     });
     
     // Handle normal play/pause based on timer
     if (timer.isRunning && !timer.isPaused) {
-      if (timer.isInPause) {
-        // If we're in an interval pause, pause the audio
-        console.log('Timer in pause interval, pausing audio');
+      if (timer.isInPause || timer.isInRest) {
+        // If we're in a pause or rest period, pause the audio
+        console.log('Timer in pause or rest period, pausing audio');
         audio.pause();
       } else {
-        // Play the audio if not in pause
+        // Play the audio if not in pause or rest
         console.log('Playing audio');
         const playPromise = audio.play();
         
@@ -253,7 +277,16 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       // Pause audio if timer is paused or not running
       audio.pause();
     }
-  }, [timer?.isRunning, timer?.isPaused, timer?.isInPause, timer, toast]);
+  }, [
+    timer?.isRunning, 
+    timer?.isPaused, 
+    timer?.isInPause, 
+    timer?.isInRest,
+    timer?.currentSetIndex, 
+    timer?.currentIntervalIndex, 
+    timer, 
+    toast
+  ]);
   
   // Handle reset
   useEffect(() => {
@@ -276,17 +309,20 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       console.log('Play button clicked: starting audio and timer');
       
       // If there was an error, try to reload the audio before playing
-      if (audioError && audioRef.current && audioUrl) {
-        setAudioError(null);
-        setIsLoading(true);
-        audioRef.current.src = audioUrl;
-        audioRef.current.load();
+      if (audioError && audioRef.current) {
+        const currentUrl = getCurrentAudioUrl();
+        if (currentUrl) {
+          setAudioError(null);
+          setIsLoading(true);
+          audioRef.current.src = currentUrl;
+          audioRef.current.load();
+        }
       }
       
       onPlay(); // Start the timer first
       
-      // Directly try to play the audio
-      if (audioRef.current) {
+      // Only try to play audio if we're not in a pause or rest period
+      if (audioRef.current && (!timer.isInPause && !timer.isInRest)) {
         const playPromise = audioRef.current.play();
         if (playPromise) {
           playPromise
@@ -330,6 +366,19 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       {/* Audio Debug Container */}
       <div className="audio-debug-container mb-4"></div>
       
+      {/* Status Badges */}
+      <div className="flex flex-wrap gap-2 mb-3 justify-center">
+        {timer?.isInPause && (
+          <Badge variant="secondary" className="animate-pulse">Pause</Badge>
+        )}
+        {timer?.isInRest && (
+          <Badge variant="secondary" className="animate-pulse">Rest Period</Badge>
+        )}
+        {timer && !timer.isInPause && !timer.isInRest && timer.isRunning && !timer.isPaused && (
+          <Badge variant="default" className="bg-purple">Active</Badge>
+        )}
+      </div>
+      
       {/* Timer Display */}
       <div className="text-4xl font-bold text-center mb-6">
         {formatTimeRemaining()}
@@ -343,7 +392,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
             className={cn(
               "w-2 bg-purple rounded-full transition-all duration-300",
               isLoading ? "animate-pulse h-1" :
-              timer?.isRunning && !timer.isPaused && !timer.isInPause
+              timer?.isRunning && !timer.isPaused && !timer.isInPause && !timer.isInRest
                 ? `animate-audio-wave-${i + 1}`
                 : "h-1"
             )}

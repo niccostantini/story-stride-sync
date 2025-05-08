@@ -30,8 +30,8 @@ const AudioStatus: React.FC<AudioStatusProps> = ({
         </Alert>
       )}
       
-      {/* Audio Debug Container */}
-      <div className="audio-debug-container mb-4"></div>
+      {/* Audio Debug Container (invisible in production) */}
+      <div className="audio-debug-container mb-4" style={{ minHeight: '10px' }}></div>
       
       {/* Status Badges */}
       <div className="flex flex-wrap gap-2 mb-3 justify-center">

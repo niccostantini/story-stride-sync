@@ -13,20 +13,30 @@ export const base64ToBlob = (base64: string, mimeType: string): Blob => {
   try {
     // Validate the base64 string first
     if (!base64 || typeof base64 !== 'string') {
-      throw new Error('Invalid base64 string provided');
+      console.warn('Invalid base64 string provided');
+      return new Blob([''], { type: mimeType });
     }
     
     // If input is a data URL, extract the base64 part
     if (base64.startsWith('data:')) {
       const parts = base64.split(',');
       if (parts.length !== 2) {
-        throw new Error('Invalid data URL format');
+        console.warn('Invalid data URL format');
+        return new Blob([''], { type: mimeType });
       }
       base64 = parts[1];
     }
     
-    // Clean the base64 string if needed (sometimes there are newlines or spaces)
+    // Clean the base64 string (remove whitespace)
     const cleanedBase64 = base64.replace(/\s/g, '');
+    
+    try {
+      // Test if the base64 string is valid by attempting to decode a small portion
+      atob(cleanedBase64.substring(0, Math.min(10, cleanedBase64.length)));
+    } catch (e) {
+      console.warn('Invalid base64 encoding detected');
+      return new Blob([''], { type: mimeType });
+    }
     
     // Convert base64 to binary
     const byteCharacters = atob(cleanedBase64);
@@ -59,44 +69,60 @@ export const base64ToBlob = (base64: string, mimeType: string): Blob => {
 export const createAudioUrl = (audioContent: string): string => {
   try {
     if (!audioContent) {
-      console.error('No audio content provided to createAudioUrl');
-      throw new Error('No audio content provided');
+      console.warn('No audio content provided to createAudioUrl');
+      return getSilentAudioUrl();
     }
-    
-    console.log(`Creating audio URL from ${audioContent.length} characters of base64 data`);
     
     // Check if audioContent is already a data URL
     if (audioContent.startsWith('data:audio/')) {
-      console.log('Audio content is already a data URL, returning as-is');
-      return audioContent;
+      // Validate the data URL format
+      try {
+        const parts = audioContent.split(',');
+        if (parts.length !== 2 || !parts[1]) {
+          console.warn('Invalid data URL format');
+          return getSilentAudioUrl();
+        }
+        
+        // Check if the base64 part is valid
+        try {
+          atob(parts[1].substring(0, Math.min(10, parts[1].length)));
+          return audioContent; // It's valid, return as-is
+        } catch (e) {
+          console.warn('Invalid base64 in data URL');
+          return getSilentAudioUrl();
+        }
+      } catch (e) {
+        console.warn('Error validating data URL');
+        return getSilentAudioUrl();
+      }
     }
     
     // Create the blob with proper MIME type
     const blob = base64ToBlob(audioContent, 'audio/mp3');
-    console.log('Created blob:', blob.size, 'bytes, type:', blob.type);
+    
+    if (blob.size <= 1) {
+      console.warn('Generated blob is too small, likely invalid');
+      return getSilentAudioUrl();
+    }
     
     // Create a URL for the blob
     const url = URL.createObjectURL(blob);
-    console.log('Created audio URL:', url);
     
-    // Store URL in sessionStorage to prevent browser garbage collection
+    // Store URL reference to prevent garbage collection
     try {
-      if (typeof sessionStorage !== 'undefined') {
-        const urlList = JSON.parse(sessionStorage.getItem('audioUrls') || '[]');
-        if (!urlList.includes(url)) {
-          urlList.push(url);
-          sessionStorage.setItem('audioUrls', JSON.stringify(urlList));
-        }
+      if (typeof window !== 'undefined' && window.audioUrlRefs) {
+        window.audioUrlRefs.push(url);
+      } else if (typeof window !== 'undefined') {
+        window.audioUrlRefs = [url];
       }
     } catch (e) {
-      console.error('Error storing URL in sessionStorage:', e);
+      console.error('Error storing URL reference:', e);
     }
     
     return url;
   } catch (error) {
     console.error('Error creating audio URL:', error);
-    // Return a data URL with a silent audio clip as fallback
-    return 'data:audio/mp3;base64,SUQzAwAAAAABOlRJVDIAAAAZAAADSW5zdHJ1bWVudGFsIFNvdW5kIEZYAA==';
+    return getSilentAudioUrl();
   }
 };
 
@@ -107,13 +133,46 @@ export const generateMockAudioResponse = (): { audioContent: string } => {
   console.log('Generating mock audio response');
   // This is a valid MP3 base64 string for a short notification sound
   return { 
-    audioContent: 'SUQzAwAAAAABOlRJVDIAAAAZAAADSW5zdHJ1bWVudGFsIFNvdW5kIEZYAA==' 
+    audioContent: 'SUQzBAAAAAABAFRYWFgAAAASAAADbWFqb3JfYnJhbmQAZGFzaABUWFhYAAAAEQAAA21pbm9yX3ZlcnNpb24AMABUWFhYAAAAHAAAA2NvbXBhdGlibGVfYnJhbmRzAGlzbzZtcDQxAFRTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tAwAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAeAAAjsAAHBwcHDw8PDw8XFxcXFx8fHx8fJycnJycvLy8vLzc3Nzc3Pz8/Pz9HR0dHR09PT09PV1dXV1dfX19fX2dnZ2dncHBwcHB4eHh4eIAAAAAAAAAAAAAAAAAAAAD/+0DEAAAFZAGAQAAAKAWIMTIAAAIAAAH0SAAALisBRW0AAAgAAA+gAAABAYWx0AAAAElubm9jZW50AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATEFNRTMuMTAwVUVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/+0DEBUAADACHIAAAAIIQIS4QAAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQ==' 
   };
 };
 
 /**
- * Get a silent audio data URL for fallback situations
+ * Get a valid silent audio data URL for fallback situations
  */
 export const getSilentAudioUrl = (): string => {
-  return 'data:audio/mp3;base64,SUQzAwAAAAABOlRJVDIAAAAZAAADSW5zdHJ1bWVudGFsIFNvdW5kIEZYAA==';
+  return 'data:audio/mp3;base64,SUQzBAAAAAABAFRYWFgAAAASAAADbWFqb3JfYnJhbmQAZGFzaABUWFhYAAAAEQAAA21pbm9yX3ZlcnNpb24AMABUWFhYAAAAHAAAA2NvbXBhdGlibGVfYnJhbmRzAGlzbzZtcDQxAFRTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tAwAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAeAAAjsAAHBwcHDw8PDw8XFxcXFx8fHx8fJycnJycvLy8vLzc3Nzc3Pz8/Pz9HR0dHR09PT09PV1dXV1dfX19fX2dnZ2dncHBwcHB4eHh4eIAAAAAAAAAAAAAAAAAAAAD/+0DEAAAFZAGAQAAAKAWIMTIAAAIAAAH0SAAALisBRW0AAAgAAA+gAAABAYWx0AAAAElubm9jZW50AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
 };
+
+/**
+ * Safely revoke object URLs to prevent memory leaks
+ */
+export const revokeAudioUrl = (url: string): void => {
+  if (url && url.startsWith('blob:')) {
+    try {
+      URL.revokeObjectURL(url);
+      
+      // Remove from references if stored
+      if (typeof window !== 'undefined' && window.audioUrlRefs) {
+        window.audioUrlRefs = window.audioUrlRefs.filter(u => u !== url);
+      }
+    } catch (e) {
+      console.error('Error revoking URL:', e);
+    }
+  }
+};
+
+// Clean up all audio URLs when needed (e.g., on component unmount)
+export const cleanupAudioUrls = (): void => {
+  if (typeof window !== 'undefined' && window.audioUrlRefs) {
+    window.audioUrlRefs.forEach(url => {
+      try {
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        console.error('Error revoking URL during cleanup:', e);
+      }
+    });
+    window.audioUrlRefs = [];
+  }
+};
+

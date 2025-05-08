@@ -1,7 +1,8 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { Timer } from '@/types';
 import { useToast } from '@/hooks/use-toast';
-import { getSilentAudioUrl } from '@/services/audioUtils';
+import { getSilentAudioUrl, revokeAudioUrl, cleanupAudioUrls } from '@/services/audioUtils';
 
 export const useAudioPlayer = (
   audioUrl: string | string[] | null,
@@ -12,13 +13,15 @@ export const useAudioPlayer = (
   const [isLoading, setIsLoading] = useState(true);
   const [audioError, setAudioError] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(false);
+  const [currentAudioUrl, setCurrentAudioUrl] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const errorRetryCount = useRef<number>(0);
   const { toast } = useToast();
   
   // Debug function to check audio element and URL
   const debugAudio = () => {
     console.log('Debug Audio Status:');
-    console.log('- Audio URL:', audioUrl);
+    console.log('- Audio URL:', currentAudioUrl);
     console.log('- Audio element exists:', !!audioRef.current);
     
     if (audioRef.current) {
@@ -29,27 +32,9 @@ export const useAudioPlayer = (
       console.log('  - duration:', audioRef.current.duration);
       console.log('  - src:', audioRef.current.src);
       
-      // Use a safe silent audio URL as fallback
-      const safeAudioUrl = getSilentAudioUrl();
-      
-      // Create a download link for the audio
-      const blob = new Blob([''], { type: 'audio/mp3' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'story-audio.mp3';
-      document.body.appendChild(a);
-      a.click();
-      
-      // Clean up
-      setTimeout(() => {
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }, 100);
-      
       toast({
-        title: "Audio Download",
-        description: "Audio file downloaded (silent placeholder)",
+        title: "Audio Status",
+        description: `Ready state: ${audioRef.current.readyState}, Paused: ${audioRef.current.paused}`,
       });
     }
   };
@@ -72,6 +57,17 @@ export const useAudioPlayer = (
     return null;
   };
   
+  // Reset audio with a silent track
+  const resetToSilentAudio = () => {
+    if (audioRef.current) {
+      const silentUrl = getSilentAudioUrl();
+      audioRef.current.src = silentUrl;
+      audioRef.current.load();
+      return silentUrl;
+    }
+    return null;
+  };
+  
   // Handle play/pause toggle
   const handlePlayPause = () => {
     if (!timer) return;
@@ -85,30 +81,32 @@ export const useAudioPlayer = (
     } else {
       console.log('Play button clicked: starting audio and timer');
       
-      // If there was an error, try to reload the audio before playing
-      if (audioError && audioRef.current) {
-        const currentUrl = getCurrentAudioUrl();
-        if (currentUrl) {
-          setAudioError(null);
-          setIsLoading(true);
-          audioRef.current.src = currentUrl;
-          audioRef.current.load();
-        }
-      }
+      // Reset error state when manually playing
+      setAudioError(null);
       
-      onPlay(); // Start the timer first
+      // Start the timer first
+      onPlay();
       
       // Only try to play audio if we're not in a pause or rest period
       if (audioRef.current && (!timer.isInPause && !timer.isInRest)) {
+        // Make sure we have the latest audio URL
+        const url = getCurrentAudioUrl();
+        if (url && url !== audioRef.current.src) {
+          audioRef.current.src = url;
+          audioRef.current.load();
+        }
+        
         const playPromise = audioRef.current.play();
         if (playPromise) {
           playPromise
             .then(() => {
               console.log('Audio playback started successfully');
+              errorRetryCount.current = 0; // Reset retry counter on success
             })
             .catch(err => {
               console.error('Failed to start audio playback:', err);
-              // Even if audio fails, keep timer running
+              // Don't set error state here to avoid stopping the timer
+              // Silent failure is better than breaking the workout
             });
         }
       }
@@ -120,15 +118,42 @@ export const useAudioPlayer = (
     if (audioRef.current) {
       audioRef.current.muted = !audioRef.current.muted;
       setIsMuted(!isMuted);
+      
+      toast({
+        title: audioRef.current.muted ? "Audio Muted" : "Audio Unmuted",
+        description: audioRef.current.muted ? "Audio playback is now muted" : "Audio playback is now audible",
+      });
     }
   };
   
-  // Force play (for development testing)
+  // Force play (for testing)
   const forcedPlay = () => {
     if (audioRef.current) {
-      audioRef.current.play().catch(e => console.error('Direct play failed:', e));
+      // Reset the src to ensure we're working with the most recent URL
+      const url = getCurrentAudioUrl() || getSilentAudioUrl();
+      audioRef.current.src = url;
+      audioRef.current.load();
+      
+      audioRef.current.play().catch(e => {
+        console.error('Direct play failed:', e);
+        toast({
+          title: "Playback Error",
+          description: "Could not play audio directly. Try clicking the regular play button.",
+          variant: "destructive",
+        });
+      });
     }
   };
+
+  // Clean up URLs when component unmounts
+  useEffect(() => {
+    return () => {
+      if (currentAudioUrl && currentAudioUrl.startsWith('blob:')) {
+        revokeAudioUrl(currentAudioUrl);
+      }
+      cleanupAudioUrls();
+    };
+  }, [currentAudioUrl]);
 
   return {
     isLoading,
@@ -137,7 +162,10 @@ export const useAudioPlayer = (
     setAudioError,
     isMuted,
     audioRef,
+    currentAudioUrl,
+    setCurrentAudioUrl,
     getCurrentAudioUrl,
+    resetToSilentAudio,
     handlePlayPause,
     toggleMute,
     debugAudio,

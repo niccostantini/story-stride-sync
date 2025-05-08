@@ -5,6 +5,7 @@ import { Timer } from '@/types';
 import AudioControls from './audio/AudioControls';
 import AudioStatus from './audio/AudioStatus';
 import { useAudioPlayer } from '@/hooks/useAudioPlayer';
+import { getSilentAudioUrl } from '@/services/audioUtils';
 
 interface AudioPlayerProps {
   audioUrl: string | string[] | null;
@@ -28,7 +29,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   getProgress
 }) => {
   const { toast } = useToast();
-  const isDevMode = window.location.hostname === 'localhost';
+  const isDevMode = process.env.NODE_ENV === 'development' || window.location.hostname === 'localhost';
   
   const {
     isLoading,
@@ -37,7 +38,10 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     setAudioError,
     isMuted,
     audioRef,
+    currentAudioUrl,
+    setCurrentAudioUrl,
     getCurrentAudioUrl,
+    resetToSilentAudio,
     handlePlayPause,
     toggleMute,
     debugAudio,
@@ -46,10 +50,17 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   
   // Initialize audio element when URL changes or timer state changes
   useEffect(() => {
-    const currentUrl = getCurrentAudioUrl();
-    
-    if (currentUrl) {
-      console.log('Setting audio URL:', currentUrl);
+    const setupAudio = () => {
+      // Get the current URL or use silent audio as fallback
+      const url = getCurrentAudioUrl();
+      
+      if (!url) {
+        setAudioError("No audio available");
+        setIsLoading(false);
+        return;
+      }
+      
+      setCurrentAudioUrl(url);
       setIsLoading(true);
       setAudioError(null);
       
@@ -58,14 +69,18 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
           audioRef.current = new Audio();
         }
         
+        // If the current src is the same, don't reload
+        if (audioRef.current.src === url) {
+          setIsLoading(false);
+          return;
+        }
+        
         // Configure audio element
         audioRef.current.preload = 'auto';
-        audioRef.current.crossOrigin = 'anonymous'; // Try to avoid CORS issues
+        audioRef.current.crossOrigin = 'anonymous';
         
-        // Set the source - handle both data URLs and blob URLs
-        audioRef.current.src = currentUrl;
-        
-        // Manually attempt to load the audio
+        // Set the source
+        audioRef.current.src = url;
         audioRef.current.load();
         
         // Explicitly setting volume
@@ -74,50 +89,47 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         console.error('Error setting up audio element:', error);
         setAudioError('Failed to initialize audio player');
         setIsLoading(false);
+        
+        // Use silent audio as fallback
+        resetToSilentAudio();
       }
-    } else {
-      console.log('No audio URL available');
-      setAudioError('No audio available');
-      setIsLoading(false);
-    }
+    };
+    
+    setupAudio();
   }, [audioUrl, timer?.currentSetIndex]);
   
-  // Add visible HTML audio element for debugging
+  // Add visible HTML audio element for debugging in dev mode
   useEffect(() => {
-    // Create a visible audio element for browser controls
-    const createVisibleAudioElement = () => {
-      const currentUrl = getCurrentAudioUrl();
+    const createDebugAudioElement = () => {
+      // Remove any existing element
+      const existingElement = document.getElementById('visible-audio-element');
+      if (existingElement && existingElement.parentNode) {
+        existingElement.parentNode.removeChild(existingElement);
+      }
       
-      if (currentUrl && !document.getElementById('visible-audio-element')) {
-        // Remove any existing element
-        const existingElement = document.getElementById('visible-audio-element');
-        if (existingElement && existingElement.parentNode) {
-          existingElement.parentNode.removeChild(existingElement);
-        }
-        
-        // Create a new audio element
+      if (isDevMode) {
+        // Create a new audio element for debugging
         const audioElement = document.createElement('audio');
         audioElement.id = 'visible-audio-element';
         audioElement.controls = true;
         audioElement.style.width = '100%';
         audioElement.style.marginBottom = '10px';
-        audioElement.style.display = 'none'; // Hide by default in production
-        audioElement.src = currentUrl;
-        
-        // In development mode, make it visible
-        if (isDevMode) {
-          audioElement.style.display = 'block';
-        }
+        audioElement.src = getSilentAudioUrl(); // Start with silent audio
         
         // Add to DOM
         const container = document.querySelector('.audio-debug-container');
         if (container) {
           container.appendChild(audioElement);
+          
+          // Update the src when our main audio element changes
+          if (currentAudioUrl) {
+            audioElement.src = currentAudioUrl;
+          }
         }
       }
     };
     
-    createVisibleAudioElement();
+    createDebugAudioElement();
     
     return () => {
       const elem = document.getElementById('visible-audio-element');
@@ -125,38 +137,55 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         elem.parentNode.removeChild(elem);
       }
     };
-  }, [audioUrl, timer?.currentSetIndex, isDevMode]);
+  }, [isDevMode, currentAudioUrl]);
   
   // Set up audio event listeners
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
     
+    let errorCount = 0;
+    const maxErrors = 3;
+    
     const handleCanPlay = () => {
       console.log('Audio can play now');
       setIsLoading(false);
-      toast({
-        title: "Audio ready",
-        description: "Your story audio is ready to play",
-      });
+      errorCount = 0; // Reset error count on successful load
+      
+      // No need for toast on every canplay event
+      if (!timer?.isRunning) {
+        toast({
+          title: "Audio ready",
+          description: "Your story audio is ready to play",
+        });
+      }
     };
     
     const handleError = (e: Event) => {
       const error = (e.target as HTMLAudioElement).error;
       console.error('Audio playback error:', error);
-      console.error('Audio src that failed:', audio.src);
-      setAudioError('Failed to load audio');
-      setIsLoading(false);
       
-      toast({
-        title: "Audio Error",
-        description: `Could not play audio: ${error?.message || 'Unknown error'}`,
-        variant: "destructive",
-      });
+      // Increment error count
+      errorCount++;
       
-      // Reset to a valid silent audio clip
-      audio.src = 'data:audio/mp3;base64,SUQzAwAAAAABOlRJVDIAAAAZAAADSW5zdHJ1bWVudGFsIFNvdW5kIEZYAA==';
-      audio.load();
+      // Only show error messages if we've hit the threshold
+      if (errorCount >= maxErrors) {
+        setAudioError(`Could not play audio: ${error?.message || 'Unknown error'}`);
+        setIsLoading(false);
+        
+        toast({
+          title: "Audio Error",
+          description: `Playback error: ${error?.message || 'Unknown error'}`,
+          variant: "destructive",
+        });
+        
+        // Reset to a silent audio
+        resetToSilentAudio();
+      } else {
+        // Try switching to silent audio without showing an error
+        console.log(`Audio error #${errorCount}, trying silent audio`);
+        resetToSilentAudio();
+      }
     };
     
     const handleEnded = () => {
@@ -171,57 +200,43 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     audio.addEventListener('canplay', handleCanPlay);
     audio.addEventListener('error', handleError);
     audio.addEventListener('ended', handleEnded);
-    audio.addEventListener('playing', () => console.log('Audio is playing'));
-    audio.addEventListener('waiting', () => console.log('Audio is waiting'));
-    audio.addEventListener('stalled', () => console.log('Audio is stalled'));
     
     return () => {
       // Remove event listeners
       audio.removeEventListener('canplay', handleCanPlay);
       audio.removeEventListener('error', handleError);
       audio.removeEventListener('ended', handleEnded);
-      audio.removeEventListener('playing', () => console.log('Audio is playing'));
-      audio.removeEventListener('waiting', () => console.log('Audio is waiting'));
-      audio.removeEventListener('stalled', () => console.log('Audio is stalled'));
     };
-  }, [timer, onPause, toast]);
+  }, [timer, onPause, toast, resetToSilentAudio]);
   
   // Synchronize audio with timer state
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !timer) return;
     
-    console.log('Timer state changed:', { 
-      isRunning: timer.isRunning, 
-      isPaused: timer.isPaused,
-      isInPause: timer.isInPause,
-      isInRest: timer.isInRest
-    });
-    
     // Handle normal play/pause based on timer
     if (timer.isRunning && !timer.isPaused) {
       if (timer.isInPause || timer.isInRest) {
         // If we're in a pause or rest period, pause the audio
-        console.log('Timer in pause or rest period, pausing audio');
         audio.pause();
       } else {
+        // Skip audio playback if there are errors
+        if (audioError) return;
+        
         // Play the audio if not in pause or rest
-        console.log('Playing audio');
         const playPromise = audio.play();
         
         if (playPromise !== undefined) {
           playPromise.catch(error => {
-            console.error('Error playing audio:', error);
+            console.warn('Non-critical error playing audio:', error);
             
-            // If autoplay is blocked, show a toast notification
+            // Don't show error for autoplay blocking - it's expected
             if (error.name === 'NotAllowedError') {
               toast({
-                  title: "Autoplay blocked",
-                  description: "Please click play to start audio playback",
+                  title: "Tap to play",
+                  description: "Please tap play to start audio",
                   variant: "default",
               });
-            } else {
-              setAudioError(`Error playing audio: ${error.message}`);
             }
           });
         }
@@ -236,7 +251,8 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     timer?.isInPause, 
     timer?.isInRest,
     timer?.currentSetIndex, 
-    timer?.currentIntervalIndex, 
+    timer?.currentIntervalIndex,
+    audioError,
     toast
   ]);
   

@@ -81,7 +81,7 @@ export const useAudioPlayback = ({
                 
                 if (errorRetryCount.current >= maxRetries) {
                   setAudioError(`Playback error: ${err.message}`);
-                  resetToSilentAudio();
+                  // Don't call resetToSilentAudio here as it could cause a loop
                 }
               }
             });
@@ -108,7 +108,7 @@ export const useAudioPlayback = ({
   const toggleMute = () => {
     if (audioRef.current) {
       audioRef.current.muted = !audioRef.current.muted;
-      setIsMuted(!isMuted);
+      setIsMuted(!audioRef.current.muted);
       
       toast({
         title: audioRef.current.muted ? "Audio Muted" : "Audio Unmuted",
@@ -168,9 +168,25 @@ export const useAudioPlayback = ({
       }
     };
     
+    // Track number of silent audio resets to prevent infinite loops
+    const silentAudioResets = new WeakMap();
+    
     const handleError = (e: Event) => {
       const error = (e.target as HTMLAudioElement).error;
       console.error('Audio playback error:', error);
+      
+      // Check if we're already playing silent audio to prevent infinite loops
+      const audioSrc = audio.src || '';
+      const isSilentAudio = audioSrc.includes('data:audio/mp3;base64') && audioSrc === getSilentAudioUrl();
+      
+      if (isSilentAudio) {
+        // If we're already playing silent audio and still getting errors,
+        // don't try to reset to silent audio again
+        console.warn('Error with silent audio, not attempting further resets');
+        setAudioError('Audio unavailable. Please try again later.');
+        setIsLoading(false);
+        return;
+      }
       
       errorRetryCount.current++;
       
@@ -184,10 +200,16 @@ export const useAudioPlayback = ({
           variant: "destructive",
         });
         
-        resetToSilentAudio();
+        // Only reset to silent audio if we're not already playing it
+        if (!isSilentAudio) {
+          console.log('Resetting to silent audio after max retries');
+          resetToSilentAudio();
+        }
       } else {
         console.log(`Audio error #${errorRetryCount.current}, trying silent audio`);
-        resetToSilentAudio();
+        if (!isSilentAudio) {
+          resetToSilentAudio();
+        }
       }
     };
     
@@ -198,7 +220,6 @@ export const useAudioPlayback = ({
       }
     };
     
-    // Track audio progress for debugging
     const handleTimeUpdate = () => {
       // Not storing this in state to avoid rerenders
       if (audio.duration > 0) {

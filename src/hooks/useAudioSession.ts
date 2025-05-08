@@ -19,7 +19,9 @@ export const useAudioSession = (
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
   const errorRetryCount = useRef<number>(0);
+  const silentAudioAttempts = useRef<number>(0);
   const maxRetries = 3;
+  const maxSilentAudioAttempts = 2; // Limit silent audio reset attempts
   
   // Use our new audio content management hook
   const { 
@@ -49,11 +51,39 @@ export const useAudioSession = (
   // Reset to silent audio for error recovery
   const resetToSilentAudio = () => {
     if (audioRef.current) {
+      // Check if we're already playing silent audio
+      const currentSrc = audioRef.current.src || '';
       const silentUrl = getSilentAudioUrl();
-      audioRef.current.src = silentUrl;
-      audioRef.current.load();
-      console.log('Reset to silent audio');
-      return silentUrl;
+      
+      // Prevent infinite loops by limiting silent audio attempts
+      if (currentSrc === silentUrl) {
+        silentAudioAttempts.current++;
+        
+        if (silentAudioAttempts.current > maxSilentAudioAttempts) {
+          console.warn(`Reached max silent audio attempts (${maxSilentAudioAttempts}), stopping reset attempts`);
+          return null;
+        }
+      } else {
+        // Reset counter when switching to silent audio from a different source
+        silentAudioAttempts.current = 0;
+      }
+      
+      console.log(`Resetting to silent audio (attempt ${silentAudioAttempts.current + 1}/${maxSilentAudioAttempts + 1})`);
+      
+      try {
+        // Properly clean up the current audio
+        audioRef.current.pause();
+        audioRef.current.removeAttribute('src');
+        audioRef.current.load();
+        
+        // Set new silent audio source
+        audioRef.current.src = silentUrl;
+        audioRef.current.load();
+        return silentUrl;
+      } catch (err) {
+        console.error("Error when resetting to silent audio:", err);
+        return null;
+      }
     }
     return null;
   };
@@ -104,9 +134,17 @@ export const useAudioSession = (
         return;
       }
       
+      // Don't change the audio source if it's already loaded
+      if (audioRef.current && audioRef.current.src === url && !audioRef.current.error) {
+        setIsLoading(false);
+        return;
+      }
+      
       setCurrentAudioUrl(url);
       setIsLoading(true);
       setAudioError(null);
+      // Reset error retry count when changing audio source
+      errorRetryCount.current = 0;
       
       try {
         if (!audioRef.current) {
@@ -115,21 +153,43 @@ export const useAudioSession = (
           audioRef.current.crossOrigin = 'anonymous';
         }
         
-        // Skip if URL is already loaded
-        if (audioRef.current.src === url) {
-          setIsLoading(false);
-          return;
-        }
+        // Clean up the current audio element before setting a new source
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
         
-        // Update audio source
-        audioRef.current.src = url;
-        audioRef.current.load();
-        audioRef.current.volume = 1.0;
+        // Update audio source with proper error handling
+        const loadPromise = new Promise<void>((resolve, reject) => {
+          const loadHandler = () => {
+            audioRef.current?.removeEventListener('canplaythrough', loadHandler);
+            resolve();
+          };
+          
+          const errorHandler = (err: Event) => {
+            audioRef.current?.removeEventListener('error', errorHandler as EventListener);
+            reject(new Error('Failed to load audio'));
+          };
+          
+          if (audioRef.current) {
+            audioRef.current.addEventListener('canplaythrough', loadHandler);
+            audioRef.current.addEventListener('error', errorHandler as EventListener);
+            audioRef.current.src = url;
+            audioRef.current.load();
+            audioRef.current.volume = 1.0;
+          }
+        });
+        
+        // We don't await this promise to avoid blocking the UI
+        loadPromise
+          .then(() => setIsLoading(false))
+          .catch(err => {
+            console.warn('Audio loading failed:', err);
+            // Don't reset to silent audio here, let the error event handler do it
+          });
+          
       } catch (error) {
         console.error('Audio setup error:', error);
         setAudioError('Failed to initialize audio');
         setIsLoading(false);
-        resetToSilentAudio();
       }
     };
     

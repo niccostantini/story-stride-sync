@@ -80,6 +80,8 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
+      // Reset any errors when manually resetting
+      setAudioError(null);
     }
     onReset();
   };

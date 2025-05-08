@@ -1,12 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, SkipBack, Trash2, Volume2, VolumeX, Download } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
-import { cn } from '@/lib/utils';
-import { Timer } from '@/types';
+
+import React, { useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
+import { Timer } from '@/types';
+import AudioControls from './audio/AudioControls';
+import AudioStatus from './audio/AudioStatus';
+import { useAudioPlayer } from '@/hooks/useAudioPlayer';
 
 interface AudioPlayerProps {
   audioUrl: string | string[] | null;
@@ -29,68 +27,22 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   formatTimeRemaining,
   getProgress
 }) => {
-  const [isLoading, setIsLoading] = useState(true);
-  const [audioError, setAudioError] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
-  const [isMuted, setIsMuted] = useState(false);
+  const isDevMode = window.location.hostname === 'localhost';
   
-  // Debug function to check audio element and URL
-  const debugAudio = () => {
-    console.log('Debug Audio Status:');
-    console.log('- Audio URL:', audioUrl);
-    console.log('- Audio element exists:', !!audioRef.current);
-    
-    if (audioRef.current) {
-      console.log('- Audio element properties:');
-      console.log('  - readyState:', audioRef.current.readyState);
-      console.log('  - paused:', audioRef.current.paused);
-      console.log('  - currentTime:', audioRef.current.currentTime);
-      console.log('  - duration:', audioRef.current.duration);
-      console.log('  - src:', audioRef.current.src);
-      
-      // Use a safe silent audio URL as fallback
-      const safeAudioUrl = 'data:audio/mp3;base64,SUQzAwAAAAABOlRJVDIAAAAZAAADSW5zdHJ1bWVudGFsIFNvdW5kIEZYAA==';
-      
-      // Create a download link for the audio
-      const blob = new Blob([''], { type: 'audio/mp3' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'story-audio.mp3';
-      document.body.appendChild(a);
-      a.click();
-      
-      // Clean up
-      setTimeout(() => {
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }, 100);
-      
-      toast({
-        title: "Audio Download",
-        description: "Audio file downloaded (silent placeholder)",
-      });
-    }
-  };
-  
-  // Get current audio URL based on timer state and story mode
-  const getCurrentAudioUrl = (): string | null => {
-    if (!audioUrl) return null;
-    
-    // If audioUrl is a string, it's a session-mode audio file
-    if (typeof audioUrl === 'string') {
-      return audioUrl;
-    }
-    
-    // If audioUrl is an array, it depends on the current set or interval
-    if (Array.isArray(audioUrl) && timer) {
-      const index = Math.min(timer.currentSetIndex, audioUrl.length - 1);
-      return audioUrl[index] || null;
-    }
-    
-    return null;
-  };
+  const {
+    isLoading,
+    setIsLoading,
+    audioError,
+    setAudioError,
+    isMuted,
+    audioRef,
+    getCurrentAudioUrl,
+    handlePlayPause,
+    toggleMute,
+    debugAudio,
+    forcedPlay
+  } = useAudioPlayer(audioUrl, timer, onPlay, onPause);
   
   // Initialize audio element when URL changes or timer state changes
   useEffect(() => {
@@ -153,7 +105,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         audioElement.src = currentUrl;
         
         // In development mode, make it visible
-        if (window.location.hostname === 'localhost') {
+        if (isDevMode) {
           audioElement.style.display = 'block';
         }
         
@@ -173,7 +125,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         elem.parentNode.removeChild(elem);
       }
     };
-  }, [audioUrl, timer?.currentSetIndex]);
+  }, [audioUrl, timer?.currentSetIndex, isDevMode]);
   
   // Set up audio event listeners
   useEffect(() => {
@@ -285,7 +237,6 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     timer?.isInRest,
     timer?.currentSetIndex, 
     timer?.currentIntervalIndex, 
-    timer, 
     toast
   ]);
   
@@ -296,198 +247,38 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       audioRef.current.currentTime = 0;
     }
   }, [timer?.isRunning]);
-  
-  // Helper functions for audio control
-  function handlePlayPause() {
-    if (!timer) return;
-    
-    if (timer.isRunning && !timer.isPaused) {
-      console.log('Pause button clicked: pausing audio and timer');
-      onPause();
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
-    } else {
-      console.log('Play button clicked: starting audio and timer');
-      
-      // If there was an error, try to reload the audio before playing
-      if (audioError && audioRef.current) {
-        const currentUrl = getCurrentAudioUrl();
-        if (currentUrl) {
-          setAudioError(null);
-          setIsLoading(true);
-          audioRef.current.src = currentUrl;
-          audioRef.current.load();
-        }
-      }
-      
-      onPlay(); // Start the timer first
-      
-      // Only try to play audio if we're not in a pause or rest period
-      if (audioRef.current && (!timer.isInPause && !timer.isInRest)) {
-        const playPromise = audioRef.current.play();
-        if (playPromise) {
-          playPromise
-            .then(() => {
-              console.log('Audio playback started successfully');
-            })
-            .catch(err => {
-              console.error('Failed to start audio playback:', err);
-              // Even if audio fails, keep timer running
-            });
-        }
-      }
-    }
-  }
-  
-  function handleReset() {
+
+  const handleReset = () => {
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
     }
     onReset();
-  }
-  
-  // Handle mute toggle
-  function toggleMute() {
-    if (audioRef.current) {
-      audioRef.current.muted = !audioRef.current.muted;
-      setIsMuted(!isMuted);
-    }
-  }
+  };
 
   return (
     <div className="w-full max-w-md mx-auto">
-      {/* Audio status message */}
-      {audioError && (
-        <Alert variant="destructive" className="mb-4">
-          <AlertDescription>{audioError}</AlertDescription>
-        </Alert>
-      )}
+      <AudioStatus
+        timer={timer}
+        audioError={audioError}
+        isLoading={isLoading}
+        formatTimeRemaining={formatTimeRemaining}
+        getProgress={getProgress}
+      />
       
-      {/* Audio Debug Container */}
-      <div className="audio-debug-container mb-4"></div>
-      
-      {/* Status Badges */}
-      <div className="flex flex-wrap gap-2 mb-3 justify-center">
-        {timer?.isInPause && (
-          <Badge variant="secondary" className="animate-pulse">Pause</Badge>
-        )}
-        {timer?.isInRest && (
-          <Badge variant="secondary" className="animate-pulse">Rest Period</Badge>
-        )}
-        {timer && !timer.isInPause && !timer.isInRest && timer.isRunning && !timer.isPaused && (
-          <Badge variant="default" className="bg-purple">Active</Badge>
-        )}
-      </div>
-      
-      {/* Timer Display */}
-      <div className="text-4xl font-bold text-center mb-6">
-        {formatTimeRemaining()}
-      </div>
-      
-      {/* Audio Visualization */}
-      <div className="flex justify-center items-end h-16 gap-1 mb-4">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div
-            key={i}
-            className={cn(
-              "w-2 bg-purple rounded-full transition-all duration-300",
-              isLoading ? "animate-pulse h-1" :
-              timer?.isRunning && !timer.isPaused && !timer.isInPause && !timer.isInRest
-                ? `animate-audio-wave-${i + 1}`
-                : "h-1"
-            )}
-          />
-        ))}
-      </div>
-      
-      {/* Progress Bar */}
-      <Progress value={getProgress()} className="h-2 mb-6" />
-      
-      {/* Controls */}
-      <div className="flex justify-center items-center gap-4">
-        <Button
-          variant="outline"
-          size="icon"
-          className="rounded-full"
-          onClick={handleReset}
-        >
-          <SkipBack className="h-5 w-5" />
-          <span className="sr-only">Restart</span>
-        </Button>
-        
-        <Button
-          variant="default"
-          size="icon"
-          className="h-14 w-14 rounded-full bg-purple hover:bg-purple-dark"
-          onClick={handlePlayPause}
-          disabled={isLoading || !!audioError}
-        >
-          {timer?.isRunning && !timer?.isPaused ? (
-            <Pause className="h-6 w-6" />
-          ) : (
-            <Play className="h-6 w-6 ml-1" />
-          )}
-          <span className="sr-only">
-            {timer?.isRunning && !timer?.isPaused ? "Pause" : "Play"}
-          </span>
-        </Button>
-        
-        {/* Mute/Unmute Button */}
-        <Button
-          variant="outline"
-          size="icon"
-          className="rounded-full"
-          onClick={toggleMute}
-        >
-          {isMuted ? (
-            <VolumeX className="h-5 w-5" />
-          ) : (
-            <Volume2 className="h-5 w-5" />
-          )}
-          <span className="sr-only">{isMuted ? "Unmute" : "Mute"}</span>
-        </Button>
-        
-        {/* Discard Story Button */}
-        <Button
-          variant="outline"
-          size="icon"
-          className="rounded-full text-destructive hover:bg-destructive/10"
-          onClick={onDiscard}
-        >
-          <Trash2 className="h-5 w-5" />
-          <span className="sr-only">Discard Story</span>
-        </Button>
-      </div>
-      
-      {/* Debug button with download functionality */}
-      <div className="mt-4">
-        <Button 
-          variant="outline" 
-          size="sm"
-          onClick={debugAudio} 
-          className="w-full text-xs flex items-center justify-center gap-2"
-        >
-          Debug Audio <Download className="h-3 w-3 ml-1" />
-        </Button>
-        
-        {/* Additional play button for direct audio testing */}
-        {window.location.hostname === 'localhost' && (
-          <Button 
-            variant="secondary" 
-            size="sm"
-            onClick={() => {
-              if (audioRef.current) {
-                audioRef.current.play().catch(e => console.error('Direct play failed:', e));
-              }
-            }} 
-            className="w-full text-xs mt-2"
-          >
-            Force Play Audio
-          </Button>
-        )}
-      </div>
+      <AudioControls
+        timer={timer}
+        isLoading={isLoading}
+        audioError={audioError}
+        isMuted={isMuted}
+        onPlayPause={handlePlayPause}
+        onReset={handleReset}
+        onMuteToggle={toggleMute}
+        onDiscard={onDiscard}
+        onDebug={debugAudio}
+        onForcedPlay={forcedPlay}
+        isDevMode={isDevMode}
+      />
     </div>
   );
 };

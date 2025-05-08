@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { StorySession, Timer } from '@/types';
 import { useStory } from '@/context/StoryContext';
 import { useTimerControls } from './timer/useTimerControls';
@@ -46,7 +46,7 @@ export const useStoryTimer = (session: StorySession | null) => {
     }
   }, [session, intervalId, setContextTimer]);
 
-  // Import timer control hooks
+  // Import timer hooks
   const { moveToNextInterval, getCurrentInterval } = useTimerNavigation(session, timer);
   const { startTimer, pauseTimer, resumeTimer, resetTimer } = useTimerControls(
     timer,

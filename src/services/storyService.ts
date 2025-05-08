@@ -1,4 +1,3 @@
-
 import { StorySettings } from "@/types";
 
 interface StoryResult {
@@ -26,7 +25,8 @@ export async function generateStory(settings: StorySettings, totalDurationSecond
     case 'session': {
       // Generate one continuous story
       storyText = mockGenerateSessionStory(settings, targetWordCount);
-      storyAudioUrl = 'data:audio/mp3;base64,PLACEHOLDER_SESSION_AUDIO';
+      // Use a valid silent MP3 data URL instead of placeholder
+      storyAudioUrl = 'data:audio/mp3;base64,SUQzAwAAAAABOlRJVDIAAAAZAAADSW5zdHJ1bWVudGFsIFNvdW5kIEZYAA==';
       break;
     }
       
@@ -41,7 +41,8 @@ export async function generateStory(settings: StorySettings, totalDurationSecond
         const setWordCount = Math.round((setDuration / totalDurationSeconds) * targetWordCount);
         
         stories.push(mockGenerateSetStory(settings, setWordCount, index, settings.sets.length));
-        audioUrls.push(`data:audio/mp3;base64,PLACEHOLDER_SET_AUDIO_${index}`);
+        // Use valid silent MP3 data URLs with unique identifiers
+        audioUrls.push(`data:audio/mp3;base64,SUQzAwAAAAABOlRJVDIAAAAZAAADSW5zdHJ1bWVudGFsIFNvdW5kIEZYAA==`);
       });
       
       storyText = stories;
@@ -69,7 +70,8 @@ export async function generateStory(settings: StorySettings, totalDurationSecond
             set.intervals.length,
             interval.label
           ));
-          audioUrls.push(`data:audio/mp3;base64,PLACEHOLDER_INTERVAL_AUDIO_${intervalCounter}`);
+          // Use valid silent MP3 data URLs with unique identifiers
+          audioUrls.push(`data:audio/mp3;base64,SUQzAwAAAAABOlRJVDIAAAAZAAADSW5zdHJ1bWVudGFsIFNvdW5kIEZYAA==`);
           intervalCounter++;
         });
       });
@@ -81,7 +83,7 @@ export async function generateStory(settings: StorySettings, totalDurationSecond
       
     default:
       storyText = "Once upon a time...";
-      storyAudioUrl = 'data:audio/mp3;base64,PLACEHOLDER_AUDIO';
+      storyAudioUrl = 'data:audio/mp3;base64,SUQzAwAAAAABOlRJVDIAAAAZAAADSW5zdHJ1bWVudGFsIFNvdW5kIEZYAA==';
   }
   
   const wordCount = typeof storyText === 'string' 

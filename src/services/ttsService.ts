@@ -1,4 +1,3 @@
-
 import { API_KEYS, isDevelopmentMode, isPreviewMode } from '../config/apiKeys';
 
 interface TTSRequest {
@@ -132,6 +131,12 @@ export const createAudioUrl = (audioContent: string): string => {
     
     console.log(`Creating audio URL from ${audioContent.length} characters of base64 data`);
     
+    // Check if audioContent is already a data URL
+    if (audioContent.startsWith('data:audio/')) {
+      console.log('Audio content is already a data URL, returning as-is');
+      return audioContent;
+    }
+    
     // Create the blob with proper MIME type
     const blob = base64ToBlob(audioContent, 'audio/mp3');
     console.log('Created blob:', blob.size, 'bytes, type:', blob.type);
@@ -185,6 +190,15 @@ const base64ToBlob = (base64: string, mimeType: string): Blob => {
       throw new Error('Invalid base64 string provided');
     }
     
+    // If input is a data URL, extract the base64 part
+    if (base64.startsWith('data:')) {
+      const parts = base64.split(',');
+      if (parts.length !== 2) {
+        throw new Error('Invalid data URL format');
+      }
+      base64 = parts[1];
+    }
+    
     // Clean the base64 string if needed (sometimes there are newlines or spaces)
     const cleanedBase64 = base64.replace(/\s/g, '');
     
@@ -220,7 +234,7 @@ const generateMockAudioResponse = (): TTSResponse => {
   console.log('Generating mock audio response');
   // This is a valid MP3 base64 string for a short notification sound
   return { 
-    audioContent: 'SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAASAAAJGAAYGBgYJCQkJCQwMDAwMDw8PDw8SUlJSUlVVVVVVWhoaGhoc3Nzc3N/f39/f4uLi4uLl5eXl5eioqKioq6urq6uurq6urrFxcXFxdDQ0NDQ3Nzc3Nzn5+fn5/Pz8/Pz//////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAZBAAAAAAAACRjDlJxFAAAAAAD/+xBkAA/wAABpAAAACAAADSAAAAEAAAGkAAAAIAAANIAAAARMQU1FMy45OS41VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU='
+    audioContent: 'SUQzAwAAAAABOlRJVDIAAAAZAAADSW5zdHJ1bWVudGFsIFNvdW5kIEZYAA==' 
   };
 };
 

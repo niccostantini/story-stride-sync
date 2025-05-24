@@ -1,3 +1,4 @@
+
 import { useEffect } from 'react';
 import { Timer } from '@/types';
 import { useToast } from '@/hooks/use-toast';
@@ -54,7 +55,8 @@ export const useAudioPlayback = ({
       onPlay();
       
       if (audioRef.current && (!timer.isInPause && !timer.isInRest)) {
-        tryPlayAudio();
+        // Small delay to ensure audio is ready
+        setTimeout(() => tryPlayAudio(), 100);
       }
     }
   };
@@ -62,6 +64,12 @@ export const useAudioPlayback = ({
   // Helper function to try playing audio with error handling
   const tryPlayAudio = () => {
     if (!audioRef.current) return;
+    
+    // Check if audio is ready to play
+    if (audioRef.current.readyState < 2) {
+      console.log('Audio not ready, readyState:', audioRef.current.readyState);
+      return;
+    }
     
     const playPromise = audioRef.current.play();
     
@@ -82,8 +90,9 @@ export const useAudioPlayback = ({
               variant: "default",
             });
           } else if (err.name === 'AbortError') {
-            // Playback was aborted, likely due to src change - can safely ignore
+            // Playback was aborted - this is normal when source changes quickly
             console.log('Playback aborted, likely due to src change');
+            // Don't set error state for AbortError as it's expected behavior
           } else {
             console.warn('Audio playback failed, continuing without audio');
             setAudioError('Audio playback failed - continuing without audio');
@@ -95,6 +104,7 @@ export const useAudioPlayback = ({
   // Direct audio play for debugging
   const forcedPlay = () => {
     if (audioRef.current) {
+      console.log('Forcing audio play, readyState:', audioRef.current.readyState);
       audioRef.current.play().catch(e => {
         console.error('Direct play failed:', e);
         toast({
@@ -110,7 +120,7 @@ export const useAudioPlayback = ({
   const toggleMute = () => {
     if (audioRef.current) {
       audioRef.current.muted = !audioRef.current.muted;
-      setIsMuted(!audioRef.current.muted);
+      setIsMuted(audioRef.current.muted);
       
       toast({
         title: audioRef.current.muted ? "Audio Muted" : "Audio Unmuted",
@@ -162,14 +172,6 @@ export const useAudioPlayback = ({
       console.log('Audio can play now');
       setIsLoading(false);
       errorRetryCount.current = 0;
-      
-      // Only show toast if not already playing
-      if (!timer?.isRunning) {
-        toast({
-          title: "Audio ready",
-          description: "Your story audio is ready to play",
-        });
-      }
     };
     
     const handleError = (e: Event) => {
@@ -181,9 +183,7 @@ export const useAudioPlayback = ({
       const isSilentAudio = audioSrc.includes('data:audio/mp3;base64');
       
       if (isSilentAudio) {
-        // If we're already playing silent audio and still getting errors,
-        // just continue without audio - don't try to reset again
-        console.warn('Error with silent audio, continuing without audio');
+        console.warn('Error with silent audio, not attempting further resets');
         setAudioError('Audio unavailable - story will continue without narration');
         setIsLoading(false);
         return;
@@ -205,7 +205,7 @@ export const useAudioPlayback = ({
     
     const handleTimeUpdate = () => {
       // Not storing this in state to avoid rerenders
-      if (audio.duration > 0) {
+      if (audio.duration > 0 && audio.duration !== Infinity) {
         const percent = (audio.currentTime / audio.duration) * 100;
         // Optional: You could emit this to a debug state or logging system
       }
@@ -235,8 +235,8 @@ export const useAudioPlayback = ({
     if (timer.isRunning && !timer.isPaused) {
       if (timer.isInPause || timer.isInRest) {
         audio.pause();
-      } else if (!audioError) {
-        // Only try to play if there are no errors
+      } else if (!audioError && audio.readyState >= 2) {
+        // Only try to play if there are no errors and audio is ready
         tryPlayAudio();
       }
     } else {

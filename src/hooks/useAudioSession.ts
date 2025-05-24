@@ -21,7 +21,8 @@ export const useAudioSession = (
   const errorRetryCount = useRef<number>(0);
   const silentAudioAttempts = useRef<number>(0);
   const maxRetries = 3;
-  const maxSilentAudioAttempts = 2; // Limit silent audio reset attempts
+  const maxSilentAudioAttempts = 2;
+  const isSettingSource = useRef<boolean>(false);
   
   // Use our audio content management hook
   const { 
@@ -48,7 +49,7 @@ export const useAudioSession = (
   
   // Reset to silent audio for error recovery
   const resetToSilentAudio = () => {
-    if (audioRef.current) {
+    if (audioRef.current && !isSettingSource.current) {
       // Check if we're already playing silent audio
       const currentSrc = audioRef.current.src || '';
       const silentUrl = getSilentAudioUrl();
@@ -69,6 +70,8 @@ export const useAudioSession = (
       console.log(`Resetting to silent audio (attempt ${silentAudioAttempts.current + 1}/${maxSilentAudioAttempts + 1})`);
       
       try {
+        isSettingSource.current = true;
+        
         // Properly clean up the current audio
         audioRef.current.pause();
         audioRef.current.removeAttribute('src');
@@ -77,9 +80,12 @@ export const useAudioSession = (
         // Set new silent audio source
         audioRef.current.src = silentUrl;
         audioRef.current.load();
+        
+        isSettingSource.current = false;
         return silentUrl;
       } catch (err) {
         console.error("Error when resetting to silent audio:", err);
+        isSettingSource.current = false;
         return null;
       }
     }
@@ -93,7 +99,7 @@ export const useAudioSession = (
       audioRef.current = new Audio();
       
       // Default configuration
-      audioRef.current.preload = 'auto';
+      audioRef.current.preload = 'metadata';
       audioRef.current.crossOrigin = 'anonymous';
       audioRef.current.volume = 1.0;
       
@@ -123,9 +129,9 @@ export const useAudioSession = (
   
   // Update audio source when URL or timer state changes
   useEffect(() => {
-    if (!processedUrls.length) return;
+    if (!processedUrls.length || isSettingSource.current) return;
     
-    const setupAudio = () => {
+    const setupAudio = async () => {
       const url = getCurrentAudioUrl();
       
       if (!url) {
@@ -134,49 +140,78 @@ export const useAudioSession = (
         return;
       }
       
-      // Don't change the audio source if it's already loaded
-      if (audioRef.current && audioRef.current.src === url && !audioRef.current.error) {
+      // Don't change the audio source if it's already the same URL
+      if (audioRef.current && audioRef.current.src === url) {
+        console.log('Audio source already set to:', url.substring(0, 50) + '...');
         setIsLoading(false);
         return;
       }
       
-      console.log('Setting up audio with URL:', url);
+      console.log('Setting up audio with URL:', url.substring(0, 50) + '...');
       setCurrentAudioUrl(url);
       setIsLoading(true);
       setAudioError(null);
-      // Reset error retry count when changing audio source
       errorRetryCount.current = 0;
       
       try {
         if (!audioRef.current) {
           audioRef.current = new Audio();
-          audioRef.current.preload = 'auto';
+          audioRef.current.preload = 'metadata';
           audioRef.current.crossOrigin = 'anonymous';
         }
+        
+        // Prevent multiple source changes
+        isSettingSource.current = true;
         
         // Clean up the current audio element before setting a new source
         audioRef.current.pause();
         audioRef.current.currentTime = 0;
         
-        // Update audio source with proper error handling
+        // Remove existing event listeners to prevent conflicts
+        audioRef.current.oncanplaythrough = null;
+        audioRef.current.onerror = null;
+        audioRef.current.onloadedmetadata = null;
+        
+        // Update audio source
         audioRef.current.src = url;
         audioRef.current.load();
+        
+        // Set up event listeners
+        audioRef.current.onloadedmetadata = () => {
+          console.log('Audio metadata loaded, duration:', audioRef.current?.duration);
+          if (audioRef.current && audioRef.current.duration && audioRef.current.duration !== Infinity) {
+            setIsLoading(false);
+            isSettingSource.current = false;
+          }
+        };
         
         audioRef.current.oncanplaythrough = () => {
           console.log('Audio can play through now');
           setIsLoading(false);
+          isSettingSource.current = false;
         };
         
         audioRef.current.onerror = (e) => {
           console.error('Audio loading error:', audioRef.current?.error);
-          setAudioError(`Failed to load audio: ${audioRef.current?.error?.message || 'Unknown error'}`);
+          setAudioError(`Audio playback unavailable - continuing without sound`);
           setIsLoading(false);
+          isSettingSource.current = false;
         };
+        
+        // Fallback timeout in case metadata never loads
+        setTimeout(() => {
+          if (isSettingSource.current) {
+            console.log('Audio loading timeout, proceeding anyway');
+            setIsLoading(false);
+            isSettingSource.current = false;
+          }
+        }, 3000);
         
       } catch (error) {
         console.error('Audio setup error:', error);
         setAudioError('Failed to initialize audio');
         setIsLoading(false);
+        isSettingSource.current = false;
       }
     };
     

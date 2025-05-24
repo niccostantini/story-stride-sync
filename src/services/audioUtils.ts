@@ -127,18 +127,18 @@ export const createAudioUrl = (audioContent: string): string => {
  */
 export const generateMockAudioResponse = (): { audioContent: string } => {
   console.log('Generating mock audio response');
-  // Instead of using a long base64 string that might be corrupted
-  // Use a small valid data URL for a short silent MP3
   return { 
-    audioContent: 'data:audio/mp3;base64,SUQzAwAAAAAAElRJVDIAAAAGAAAAU2lsZW50AA==' 
+    audioContent: getSilentAudioUrl()
   };
 };
 
 /**
  * Get a valid silent audio data URL for fallback situations
+ * This is a proper 1-second silent MP3 file
  */
 export const getSilentAudioUrl = (): string => {
-  return 'data:audio/mp3;base64,SUQzAwAAAAAAElRJVDIAAAAGAAAAU2lsZW50AA==';
+  // A proper 1-second silent MP3 file (much more robust than the previous minimal version)
+  return 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAASAAAOsAAUFBQUFBQoKCgoKCgoKCg9PT09PT09PUFBQUFBQUFBQVVVVVVVVVVVVWVVVVVVVVVVVX19fX19fX19fYWFhYWFhYWFhYWOjo6Ojo6Ojo6OlpaWlpaWlpaWlqKioqKioqKioqKurq6urq6urq6uurq6urq6urq6//////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAACQAAAAAAAAAAAazA///tSAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
 };
 
 /**

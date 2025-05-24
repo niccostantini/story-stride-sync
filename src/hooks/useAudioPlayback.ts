@@ -1,4 +1,3 @@
-
 import { useEffect } from 'react';
 import { Timer } from '@/types';
 import { useToast } from '@/hooks/use-toast';
@@ -79,20 +78,15 @@ export const useAudioPlayback = ({
           if (err.name === 'NotAllowedError') {
             toast({
               title: "Interaction Required",
-              description: "Browser requires user interaction before playing audio",
+              description: "Please click play to enable audio",
               variant: "default",
             });
           } else if (err.name === 'AbortError') {
             // Playback was aborted, likely due to src change - can safely ignore
             console.log('Playback aborted, likely due to src change');
           } else {
-            // For other errors, increment retry counter
-            errorRetryCount.current++;
-            
-            if (errorRetryCount.current >= maxRetries) {
-              setAudioError(`Playback error: ${err.message}`);
-              // We'll continue normally without silent audio to prevent loops
-            }
+            console.warn('Audio playback failed, continuing without audio');
+            setAudioError('Audio playback failed - continuing without audio');
           }
         });
     }
@@ -135,10 +129,11 @@ export const useAudioPlayback = ({
         paused: audioRef.current.paused,
         currentTime: audioRef.current.currentTime,
         duration: audioRef.current.duration,
-        src: audioRef.current.src,
+        src: audioRef.current.src.substring(0, 100) + '...',
         muted: audioRef.current.muted,
         volume: audioRef.current.volume,
-        loadingProgress: loadingProgress
+        loadingProgress: loadingProgress,
+        error: audioRef.current.error
       };
       
       console.table(debugInfo);
@@ -183,35 +178,22 @@ export const useAudioPlayback = ({
       
       // Check if we're already playing silent audio to prevent infinite loops
       const audioSrc = audio.src || '';
-      const isSilentAudio = audioSrc === getSilentAudioUrl();
+      const isSilentAudio = audioSrc.includes('data:audio/mp3;base64');
       
       if (isSilentAudio) {
         // If we're already playing silent audio and still getting errors,
-        // don't try to reset to silent audio again
-        console.warn('Error with silent audio, not attempting further resets');
-        setAudioError('Audio unavailable. Story will continue without audio.');
+        // just continue without audio - don't try to reset again
+        console.warn('Error with silent audio, continuing without audio');
+        setAudioError('Audio unavailable - story will continue without narration');
         setIsLoading(false);
         return;
       }
       
-      // Increment error counter
-      errorRetryCount.current++;
+      // For non-silent audio errors, just show error and continue
+      setAudioError(`Audio playback issue - continuing without audio`);
+      setIsLoading(false);
       
-      if (errorRetryCount.current >= maxRetries) {
-        // After max retries, just show error but continue without audio
-        setAudioError(`Audio error: ${error?.message || 'Unknown error'}`);
-        setIsLoading(false);
-        
-        toast({
-          title: "Audio Error",
-          description: "Continue with your story without audio narration",
-          variant: "destructive",
-        });
-      } else if (!isSilentAudio) {
-        // Only try silent audio if not already using it
-        console.log(`Audio error #${errorRetryCount.current}, using silent audio`);
-        resetToSilentAudio();
-      }
+      console.log('Continuing story without audio due to playback issues');
     };
     
     const handleEnded = () => {

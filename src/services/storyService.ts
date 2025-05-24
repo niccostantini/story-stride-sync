@@ -1,5 +1,6 @@
 
 import { StorySettings } from "@/types";
+import { getSilentAudioUrl } from "./audioUtils";
 
 interface StoryResult {
   storyText: string | string[];
@@ -26,8 +27,8 @@ export async function generateStory(settings: StorySettings, totalDurationSecond
     case 'session': {
       // Generate one continuous story
       storyText = mockGenerateSessionStory(settings, targetWordCount);
-      // Use a simplified silent MP3 data URL
-      storyAudioUrl = 'data:audio/mp3;base64,SUQzAwAAAAAAElRJVDIAAAAGAAAAU2lsZW50AA==';
+      // Use the proper silent audio URL
+      storyAudioUrl = getSilentAudioUrl();
       break;
     }
       
@@ -42,8 +43,8 @@ export async function generateStory(settings: StorySettings, totalDurationSecond
         const setWordCount = Math.round((setDuration / totalDurationSeconds) * targetWordCount);
         
         stories.push(mockGenerateSetStory(settings, setWordCount, index, settings.sets.length));
-        // Use simplified silent MP3 data URLs with unique identifiers
-        audioUrls.push(`data:audio/mp3;base64,SUQzAwAAAAAAElRJVDIAAAAGAAAAU2lsZW50AA==`);
+        // Use the proper silent audio URL for each set
+        audioUrls.push(getSilentAudioUrl());
       });
       
       storyText = stories;
@@ -71,8 +72,8 @@ export async function generateStory(settings: StorySettings, totalDurationSecond
             set.intervals.length,
             interval.label
           ));
-          // Use simplified silent MP3 data URLs with unique identifiers
-          audioUrls.push(`data:audio/mp3;base64,SUQzAwAAAAAAElRJVDIAAAAGAAAAU2lsZW50AA==`);
+          // Use the proper silent audio URL for each interval
+          audioUrls.push(getSilentAudioUrl());
           intervalCounter++;
         });
       });
@@ -84,7 +85,7 @@ export async function generateStory(settings: StorySettings, totalDurationSecond
       
     default:
       storyText = "Once upon a time...";
-      storyAudioUrl = 'data:audio/mp3;base64,SUQzAwAAAAAAElRJVDIAAAAGAAAAU2lsZW50AA==';
+      storyAudioUrl = getSilentAudioUrl();
   }
   
   const wordCount = typeof storyText === 'string' 
